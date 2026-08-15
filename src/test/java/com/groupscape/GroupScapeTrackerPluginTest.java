@@ -1,13 +1,13 @@
-package men.groupiron;
+package com.groupscape;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class GroupIronmenTrackerPluginTest
+public class GroupScapeTrackerPluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(GroupIronmenTrackerPlugin.class);
+		ExternalPluginManager.loadBuiltin(GroupScapeTrackerPlugin.class);
 		RuneLite.main(args);
 	}
 }

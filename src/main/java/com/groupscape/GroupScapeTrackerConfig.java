@@ -1,12 +1,12 @@
-package men.groupiron;
+package com.groupscape;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 
-@ConfigGroup("GroupIronmenTracker")
-public interface GroupIronmenTrackerConfig extends Config {
+@ConfigGroup("GroupScapeTracker")
+public interface GroupScapeTrackerConfig extends Config {
     @ConfigSection(
             name = "Group Config",
             description = "Enter the group details you created on the website here",

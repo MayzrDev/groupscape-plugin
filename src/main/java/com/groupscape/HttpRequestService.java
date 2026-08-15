@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import com.google.gson.Gson;
 import java.io.IOException;
@@ -14,14 +14,14 @@ import okhttp3.*;
 public class HttpRequestService {
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final String USER_AGENT =
-            "GroupIronmenTracker/" + PluginVersion.get() + " " + "RuneLite/" + RuneLiteProperties.getVersion();
-    private static final String PUBLIC_BASE_URL = "https://groupiron.men";
+            "GroupScapeTracker/" + PluginVersion.get() + " " + "RuneLite/" + RuneLiteProperties.getVersion();
+    private static final String PUBLIC_BASE_URL = "https://groupscape.mayzr.online";
 
     @Inject
     private OkHttpClient okHttpClient;
 
     @Inject
-    private GroupIronmenTrackerConfig config;
+    private GroupScapeTrackerConfig config;
 
     @Inject
     private Gson gson;

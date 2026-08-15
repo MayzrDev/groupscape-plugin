@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import java.util.HashMap;
 import java.util.Map;

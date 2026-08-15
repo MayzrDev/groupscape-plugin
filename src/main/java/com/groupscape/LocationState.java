@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import lombok.Getter;
 import net.runelite.api.coords.WorldPoint;

@@ -1,9 +1,9 @@
-# Group Ironmen Tracker Plugin
-Website: [groupiron.men](https://groupiron.men)  
-Demo: [grouiron.men/demo](https://groupiron.men/demo)  
-Source for frontend and server: [https://github.com/christoabrown/group-ironmen](https://github.com/christoabrown/group-ironmen)
+# GroupScape Tracker Plugin
+Website: [groupscape.mayzr.online](https://groupscape.mayzr.online)  
+Demo: [groupscape.mayzr.online/demo](https://groupscape.mayzr.online/demo)  
+Source for frontend and server: [https://github.com/MayzrDev/groupscape-web](https://github.com/MayzrDev/groupscape-web)
 
-This plugin tracks information about your group ironman player and sends it to a server where you and your other group members can view it. Currently it tracks:
+This plugin tracks information about your RuneScape group's players and sends it to a server where you and your other group members can view it. Currently it tracks:
 
 * Inventory, equipment, bank, rune pouch, seed vault, and shared bank
 * Skill XP

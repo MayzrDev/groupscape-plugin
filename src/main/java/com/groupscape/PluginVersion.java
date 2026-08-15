@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,7 +15,7 @@ public final class PluginVersion {
 
     private static String loadVersion() {
         Properties props = new Properties();
-        try (InputStream is = PluginVersion.class.getResourceAsStream("/men/groupiron/version.properties")) {
+        try (InputStream is = PluginVersion.class.getResourceAsStream("/com/groupscape/version.properties")) {
             if (is != null) {
                 props.load(is);
                 return props.getProperty("version", "unknown");

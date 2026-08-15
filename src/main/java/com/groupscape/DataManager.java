@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ public class DataManager {
     @Inject
     Client client;
     @Inject
-    GroupIronmenTrackerConfig config;
+    GroupScapeTrackerConfig config;
     @Inject
     private CollectionLogV2Manager collectionLogV2Manager;
     @Inject

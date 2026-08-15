@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;

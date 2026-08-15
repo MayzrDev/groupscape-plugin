@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
@@ -24,9 +24,9 @@ import java.util.Set;
 
 @Slf4j
 @PluginDescriptor(
-        name = "Group Ironmen Tracker"
+        name = "GroupScape Tracker"
 )
-public class GroupIronmenTrackerPlugin extends Plugin {
+public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private Client client;
     @Inject
@@ -49,7 +49,7 @@ public class GroupIronmenTrackerPlugin extends Plugin {
     @Override
     protected void startUp() throws Exception {
         collectionLogWidgetSubscriber.startUp();
-        log.info("Group Ironmen Tracker v{} started!", PluginVersion.get());
+        log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
 
     @Override
@@ -57,7 +57,7 @@ public class GroupIronmenTrackerPlugin extends Plugin {
         collectionLogWidgetSubscriber.shutDown();
         cachePotions = false;
         potionStoreVars = null;
-        log.info("Group Ironmen Tracker stopped!");
+        log.info("GroupScape Tracker stopped!");
     }
 
     @Schedule(
@@ -269,7 +269,7 @@ public class GroupIronmenTrackerPlugin extends Plugin {
     }
 
     @Provides
-    GroupIronmenTrackerConfig provideConfig(ConfigManager configManager) {
-        return configManager.getConfig(GroupIronmenTrackerConfig.class);
+    GroupScapeTrackerConfig provideConfig(ConfigManager configManager) {
+        return configManager.getConfig(GroupScapeTrackerConfig.class);
     }
 }

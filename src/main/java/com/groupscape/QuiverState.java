@@ -1,4 +1,4 @@
-package men.groupiron;
+package com.groupscape;
 
 import net.runelite.api.Client;
 import net.runelite.api.gameval.VarPlayerID;
