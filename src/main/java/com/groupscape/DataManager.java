@@ -186,12 +186,7 @@ public class DataManager {
     }
 
     private String groupName() {
-        String groupName = config.groupName().trim();
-        if (groupName.length() == 0) {
-            return null;
-        }
-
-        return groupName;
+        return GroupToken.parseGroupName(config.authorizationToken());
     }
 
     private String getUpdateGroupMemberUrl() {

@@ -9,7 +9,7 @@ import net.runelite.client.config.ConfigSection;
 public interface GroupScapeTrackerConfig extends Config {
     @ConfigSection(
             name = "Group Config",
-            description = "Enter the group details you created on the website here",
+            description = "Enter the group token you created on the website here",
             position = 0
     )
     String groupSection = "GroupSection";
@@ -23,19 +23,9 @@ public interface GroupScapeTrackerConfig extends Config {
     String connectionSection = "ConnectionSection";
 
     @ConfigItem(
-            keyName = "groupName",
-            name = "Group Name (on the website)",
-            description = "This is the group name you provided on the website when creating your group",
-            section = groupSection
-    )
-    default String groupName() {
-        return "";
-    }
-
-    @ConfigItem(
             keyName = "groupToken",
             name = "Group Token",
-            description = "Secret token for your group provided by the website. Get this from the member which created the group on the site, or create a new one by visiting the site.",
+            description = "Secret token for your group provided by the website. This links you to your group, get it from the member which created the group on the site, or create a new one by visiting the site.",
             secret = true,
             section = groupSection
     )

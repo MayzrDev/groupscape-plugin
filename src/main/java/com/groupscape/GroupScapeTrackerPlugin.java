@@ -30,7 +30,7 @@ import java.util.Set;
 
 @Slf4j
 @PluginDescriptor(
-        name = "GroupScape Tracker"
+        name = "GroupScape"
 )
 public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
@@ -100,10 +100,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /** Connects/reconnects the party overlay's WebSocket whenever the configured group or token changes. */
     private void reconcileRosterConnection() {
-        String groupName = config.groupName().trim();
         String token = config.authorizationToken().trim();
+        String groupName = GroupToken.parseGroupName(token);
 
-        if (groupName.isEmpty() || token.isEmpty()) {
+        if (groupName == null || groupName.isEmpty() || token.isEmpty()) {
             rosterClient.disconnect();
             return;
         }
