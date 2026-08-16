@@ -1,6 +1,10 @@
 package com.groupscape;
 
+import com.google.gson.Gson;
 import com.google.inject.Provides;
+import com.groupscape.roster.PartyFrameOverlay;
+import com.groupscape.roster.RosterClient;
+import com.groupscape.roster.RosterState;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
@@ -17,6 +21,8 @@ import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.task.Schedule;
+import net.runelite.client.ui.overlay.OverlayManager;
+import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
@@ -35,11 +41,27 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private ItemManager itemManager;
     @Inject
     private CollectionLogWidgetSubscriber collectionLogWidgetSubscriber;
+    @Inject
+    private PortraitCaptureManager portraitCaptureManager;
+    @Inject
+    private GroupScapeTrackerConfig config;
+    @Inject
+    private HttpRequestService httpRequestService;
+    @Inject
+    private OverlayManager overlayManager;
+    @Inject
+    private OkHttpClient okHttpClient;
+    @Inject
+    private Gson gson;
+    private RosterState rosterState;
+    private RosterClient rosterClient;
+    private PartyFrameOverlay partyFrameOverlay;
     private int itemsDeposited = 0;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
     private static final int SECONDS_BETWEEN_INFREQUENT_DATA_CHANGES = 60;
+    private static final int SECONDS_BETWEEN_PORTRAIT_BACKSTOP = 300;
     private static final int DEPOSIT_ITEM = 12582914;
     private static final int DEPOSIT_INVENTORY = 12582916;
     private static final int DEPOSIT_EQUIPMENT = 12582918;
@@ -49,6 +71,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Override
     protected void startUp() throws Exception {
         collectionLogWidgetSubscriber.startUp();
+
+        rosterState = new RosterState();
+        rosterClient = new RosterClient(okHttpClient, gson, rosterState);
+        partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState);
+        overlayManager.add(partyFrameOverlay);
+
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
 
@@ -57,7 +85,30 @@ public class GroupScapeTrackerPlugin extends Plugin {
         collectionLogWidgetSubscriber.shutDown();
         cachePotions = false;
         potionStoreVars = null;
+
+        if (partyFrameOverlay != null) {
+            overlayManager.remove(partyFrameOverlay);
+            partyFrameOverlay = null;
+        }
+        if (rosterClient != null) {
+            rosterClient.shutdown();
+            rosterClient = null;
+        }
+
         log.info("GroupScape Tracker stopped!");
+    }
+
+    /** Connects/reconnects the party overlay's WebSocket whenever the configured group or token changes. */
+    private void reconcileRosterConnection() {
+        String groupName = config.groupName().trim();
+        String token = config.authorizationToken().trim();
+
+        if (groupName.isEmpty() || token.isEmpty()) {
+            rosterClient.disconnect();
+            return;
+        }
+
+        rosterClient.connect(httpRequestService.getBaseUrl(), groupName, token);
     }
 
     @Schedule(
@@ -74,11 +125,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
             unit = ChronoUnit.SECONDS
     )
     public void updateThingsThatDoChangeOften() {
+        reconcileRosterConnection();
+
         if (doNotUseThisData())
             return;
         Player player = client.getLocalPlayer();
         String playerName = player.getName();
         dataManager.getResources().update(new ResourcesState(playerName, client));
+        dataManager.getSpecialAttack().update(new SpecialAttackState(playerName, client));
+        dataManager.getActivePrayers().update(new ActivePrayersState(playerName, client));
+        dataManager.getRichPresence().update(new RichPresenceState(playerName, client));
 
         LocalPoint localPoint = player.getLocalLocation();
         WorldView worldView = player.getWorldView();
@@ -107,6 +163,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
         String playerName = client.getLocalPlayer().getName();
         dataManager.getQuests().update(new QuestState(playerName, client));
         dataManager.getAchievementDiary().update(new AchievementDiaryState(playerName, client));
+    }
+
+    @Schedule(
+            period = SECONDS_BETWEEN_PORTRAIT_BACKSTOP,
+            unit = ChronoUnit.SECONDS
+    )
+    public void capturePortraitBackstop() {
+        portraitCaptureManager.captureIfLoggedIn();
     }
 
     @Subscribe
@@ -163,6 +227,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onGameStateChanged(GameStateChanged event) {
+        if (event.getGameState() == GameState.LOGGED_IN) {
+            portraitCaptureManager.onLogin();
+        }
+    }
+
+    @Subscribe
     public void onItemContainerChanged(ItemContainerChanged event) {
         if (doNotUseThisData())
             return;
@@ -189,6 +260,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             }
 
             dataManager.getEquipment().update(newEquipmentState);
+            portraitCaptureManager.onEquipmentSynced();
         } else if (id == InventoryID.INV_GROUP_TEMP) {
             dataManager.getSharedBank().update(new ItemContainerState(playerName, container, itemManager));
         }

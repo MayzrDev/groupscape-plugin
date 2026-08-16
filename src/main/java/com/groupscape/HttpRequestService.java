@@ -41,6 +41,14 @@ public class HttpRequestService {
         return executeRequest(request, "POST", url, requestJson);
     }
 
+    public HttpResponse postBytes(String url, String authToken, byte[] requestBody, String contentType) {
+        RequestBody body = RequestBody.create(MediaType.parse(contentType), requestBody);
+
+        Request request = buildRequest(url, authToken).post(body).build();
+
+        return executeRequest(request, "POST", url, "<" + requestBody.length + " bytes>");
+    }
+
     private Request.Builder buildRequest(String url, String authToken) {
         Request.Builder requestBuilder = new Request.Builder().url(url).header("User-Agent", USER_AGENT);
 

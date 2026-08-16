@@ -54,6 +54,12 @@ public class DataManager {
     @Getter
     private final DataState achievementDiary = new DataState("diary_vars", false);
     @Getter
+    private final DataState specialAttack = new DataState("special_attack", false);
+    @Getter
+    private final DataState activePrayers = new DataState("active_prayers", false);
+    @Getter
+    private final DataState richPresence = new DataState("rich_presence", false);
+    @Getter
     private final DepositedItems deposited = new DepositedItems();
 
     public void submitToApi() {
@@ -100,6 +106,9 @@ public class DataManager {
             seedVault.consumeState(updates);
             potionStorage.consumeState(updates);
             achievementDiary.consumeState(updates);
+            specialAttack.consumeState(updates);
+            activePrayers.consumeState(updates);
+            richPresence.consumeState(updates);
             collectionLogV2Manager.consumeClogItems(updates);
 
             if (updates.size() > 1) {
@@ -116,6 +125,27 @@ public class DataManager {
                 }
             } else {
                 log.debug("Skip POST: no changes to send (fields={})", updates.size());
+            }
+        }
+    }
+
+    public void uploadPortrait(byte[] mesh) {
+        if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
+
+        String playerName = client.getLocalPlayer().getName();
+        String groupToken = config.authorizationToken().trim();
+        if (groupToken.isEmpty() || !isMemberInGroup) return;
+
+        String url = getUpdatePortraitUrl(playerName);
+        if (url == null) return;
+
+        HttpRequestService.HttpResponse response =
+                httpRequestService.postBytes(url, groupToken, mesh, "application/octet-stream");
+
+        if (!response.isSuccessful()) {
+            log.debug("Portrait upload failed ({} bytes): {} {}", mesh.length, response.getCode(), response.getBody());
+            if (response.getCode() == 401) {
+                isMemberInGroup = false;
             }
         }
     }
@@ -146,6 +176,9 @@ public class DataManager {
         seedVault.restoreState();
         potionStorage.restoreState();
         achievementDiary.restoreState();
+        specialAttack.restoreState();
+        activePrayers.restoreState();
+        richPresence.restoreState();
     }
 
     private String baseUrl() {
@@ -177,6 +210,15 @@ public class DataManager {
         if (baseUrl == null || groupName == null) return null;
 
         return String.format("%s/api/group/%s/am-i-in-group?member_name=%s", baseUrl, groupName, playerName);
+    }
+
+    private String getUpdatePortraitUrl(String playerName) {
+        String baseUrl = baseUrl();
+        String groupName = groupName();
+
+        if (baseUrl == null || groupName == null) return null;
+
+        return String.format("%s/api/group/%s/update-portrait/%s", baseUrl, groupName, playerName);
     }
 
     private boolean isBadWorldType() {
