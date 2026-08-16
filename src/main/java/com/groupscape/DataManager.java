@@ -134,7 +134,13 @@ public class DataManager {
 
         String playerName = client.getLocalPlayer().getName();
         String groupToken = config.authorizationToken().trim();
-        if (groupToken.isEmpty() || !isMemberInGroup) return;
+        // Unlike submitToApi(), don't gate on isMemberInGroup here: the mesh is already
+        // serialized by the time we get here, so there's no work to save by waiting for that
+        // flag, and captures happen too rarely (login/equip-change/5min backstop) to risk losing
+        // one to the flag not having been confirmed true yet. The /update-portrait route is
+        // behind the same Authenticated middleware as everything else, so a bad token still
+        // fails safely below.
+        if (groupToken.isEmpty()) return;
 
         String url = getUpdatePortraitUrl(playerName);
         if (url == null) return;
