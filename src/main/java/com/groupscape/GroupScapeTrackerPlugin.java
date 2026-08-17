@@ -18,8 +18,11 @@ import net.runelite.api.WorldView;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.plugins.loottracker.LootReceived;
+import net.runelite.http.api.loottracker.LootRecordType;
 import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
@@ -33,7 +36,11 @@ import java.awt.image.BufferedImage;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Slf4j
@@ -376,6 +383,66 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // box window is open in the item container event since it is possible for a player to close the widget before
         // the event handler is called.
         itemsDeposited = 2;
+    }
+
+    /**
+     * No generic "NPC died" event exists in the RuneLite API (see {@link BossKillNpcNames}'s
+     * class doc) - {@code getHealthRatio() == 0} plus the curated name allowlist approximates
+     * it, ported from groupscape-old.
+     */
+    @Subscribe
+    public void onNpcDespawned(NpcDespawned event) {
+        if (doNotUseThisData()) return;
+
+        NPC npc = event.getNpc();
+        String name = npc.getName();
+        if (!BossKillNpcNames.isTrackedBoss(name) || npc.getHealthRatio() != 0) return;
+
+        WorldPoint wp = npc.getWorldLocation();
+        if (wp == null) return;
+
+        String playerName = client.getLocalPlayer().getName();
+        dataManager.getKillLootDeathEvents().onKill(playerName, npc.getId(), name, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+    }
+
+    /**
+     * {@code LootReceived} is RuneLite's own client-side wrapper around the authoritative
+     * in-game loot-tracker script signal, preferred over a same-tick/same-tile ItemSpawned
+     * correlation. Correlated to a pending kill best-effort by
+     * {@link KillLootDeathEvents#onLoot}; chest/pickpocket/clue-scroll loot sources bypass
+     * NPC-loot events entirely and are out of scope here.
+     */
+    @Subscribe
+    public void onLootReceived(LootReceived event) {
+        if (event.getType() != LootRecordType.NPC) return;
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        for (ItemStack item : event.getItems()) {
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("itemId", item.getId());
+            entry.put("quantity", item.getQuantity());
+            items.add(entry);
+        }
+
+        dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
+    }
+
+    /**
+     * {@code ActorDeath} filtered to the local player. Killer attribution is best-effort only
+     * via {@code Actor.getInteracting()} (the closest available signal - there is no attacker
+     * field on hitsplats), ported from groupscape-old.
+     */
+    @Subscribe
+    public void onActorDeath(ActorDeath event) {
+        Player local = client.getLocalPlayer();
+        if (event.getActor() != local) return;
+
+        WorldPoint wp = local.getWorldLocation();
+        if (wp == null) return;
+
+        Actor interacting = local.getInteracting();
+        String killerName = interacting != null ? interacting.getName() : null;
+        dataManager.getKillLootDeathEvents().onDeath(local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName);
     }
 
     private void updateInteracting() {
