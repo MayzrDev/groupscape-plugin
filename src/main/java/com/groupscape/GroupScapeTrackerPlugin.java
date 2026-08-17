@@ -28,6 +28,7 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.LinkBrowser;
+import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 import java.awt.Color;
@@ -365,7 +366,39 @@ public class GroupScapeTrackerPlugin extends Plugin {
             if (param1 == DEPOSIT_ITEM || param1 == DEPOSIT_INVENTORY || param1 == DEPOSIT_EQUIPMENT) {
                 itemsMayHaveBeenDeposited();
             }
+        } else if (isGameObjectAction(menuAction)) {
+            recordObjectInteraction(event);
         }
+    }
+
+    private static boolean isGameObjectAction(MenuAction menuAction) {
+        return menuAction == MenuAction.GAME_OBJECT_FIRST_OPTION
+                || menuAction == MenuAction.GAME_OBJECT_SECOND_OPTION
+                || menuAction == MenuAction.GAME_OBJECT_THIRD_OPTION
+                || menuAction == MenuAction.GAME_OBJECT_FOURTH_OPTION
+                || menuAction == MenuAction.GAME_OBJECT_FIFTH_OPTION;
+    }
+
+    /**
+     * {@code Actor.getInteracting()} (used for NPC/combat presence, see {@link #updateInteracting})
+     * never fires for clicking a game object - a Wintertodt brazier, a Guardians of the Rift
+     * portal, a fishing spot - so this is the only signal available for object interactions.
+     * Fires on the click itself rather than any confirmation the action completed, matching
+     * this class's other best-effort event captures.
+     */
+    private void recordObjectInteraction(MenuOptionClicked event) {
+        if (doNotUseThisData()) return;
+
+        Player local = client.getLocalPlayer();
+        if (local == null || local.getName() == null) return;
+
+        WorldPoint wp = local.getWorldLocation();
+        if (wp == null) return;
+
+        String objectName = Text.removeTags(event.getMenuTarget());
+        dataManager.getObjectInteractionEvents().onObjectInteraction(
+                local.getName(), event.getId(), objectName, event.getMenuOption(),
+                wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
     }
 
     @Subscribe

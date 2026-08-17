@@ -68,6 +68,8 @@ public class DataManager {
     private final DepositedItems deposited = new DepositedItems();
     @Getter
     private final KillLootDeathEvents killLootDeathEvents = new KillLootDeathEvents();
+    @Getter
+    private final ObjectInteractionEvents objectInteractionEvents = new ObjectInteractionEvents();
 
     public void submitToApi() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
@@ -119,6 +121,7 @@ public class DataManager {
             richPresence.consumeState(updates);
             collectionLogV2Manager.consumeClogItems(updates);
             killLootDeathEvents.consumeState(updates);
+            objectInteractionEvents.consumeState(updates);
 
             if (updates.size() > 1) {
                 HttpRequestService.HttpResponse response = httpRequestService.post(url, groupToken, updates);
@@ -202,6 +205,7 @@ public class DataManager {
         activePrayers.restoreState();
         richPresence.restoreState();
         killLootDeathEvents.restoreState();
+        objectInteractionEvents.restoreState();
     }
 
     private String baseUrl() {
