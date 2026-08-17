@@ -77,6 +77,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private GroupScapePanel panel;
     private NavigationButton navigationButton;
     private int itemsDeposited = 0;
+    private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
@@ -94,7 +95,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         rosterState = new RosterState();
         rosterClient = new RosterClient(okHttpClient, gson, rosterState);
-        partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState);
+        partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
 
         panel = new GroupScapePanel();
@@ -210,7 +211,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getResources().update(new ResourcesState(playerName, client));
         dataManager.getSpecialAttack().update(new SpecialAttackState(playerName, client));
         dataManager.getActivePrayers().update(new ActivePrayersState(playerName, client));
-        dataManager.getRichPresence().update(new RichPresenceState(playerName, client));
+        dataManager.getRichPresence().update(new RichPresenceState(playerName, client, dataManager.getNpcDialogueTracker()));
 
         LocalPoint localPoint = player.getLocalLocation();
         WorldView worldView = player.getWorldView();
@@ -480,15 +481,59 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     private void updateInteracting() {
         Player player = client.getLocalPlayer();
+        if (player == null) return;
 
-        if (player != null) {
-            Actor actor = player.getInteracting();
+        Actor actor = player.getInteracting();
+        if (actor != null) {
+            String playerName = player.getName();
+            dataManager.getInteracting().update(new InteractingState(playerName, actor, client));
 
-            if (actor != null) {
-                String playerName = player.getName();
-                dataManager.getInteracting().update(new InteractingState(playerName, actor, client));
+            if (actor instanceof NPC) {
+                NPC npc = (NPC) actor;
+                dataManager.getNpcDialogueTracker().observe(npc.getId(), npc.getName(), npc.getCombatLevel());
             }
         }
+
+        updateNpcDialogueEvent(player);
+    }
+
+    /**
+     * Emits one "dialogue" interaction event per dialogue session (start), not once per tick
+     * while the box stays open - {@code dialogueEventEmitted} dedupes across ticks and is reset
+     * as soon as the dialogue widgets close.
+     */
+    private void updateNpcDialogueEvent(Player player) {
+        NpcDialogueTracker tracker = dataManager.getNpcDialogueTracker();
+
+        if (!isDialogueOpen()) {
+            tracker.clear();
+            dialogueEventEmitted = false;
+            return;
+        }
+
+        Integer npcId = tracker.lastNpcId();
+        if (npcId == null || dialogueEventEmitted) return;
+
+        WorldPoint wp = player.getWorldLocation();
+        if (wp == null) return;
+
+        dataManager.getInteractionEvents().onDialogue(player.getName(), npcId, tracker.lastNpcName(), tracker.lastCombatLevel(),
+                wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+        dialogueEventEmitted = true;
+    }
+
+    /**
+     * The chat-dialogue box (NPC text or the option-select menu) being open is the one signal
+     * that actually distinguishes "talking to" from "fighting" - both fire the same
+     * {@code getInteracting()} target. Ported from groupscape-old's equivalent check.
+     */
+    private boolean isDialogueOpen() {
+        Widget npcText = client.getWidget(InterfaceID.ChatLeft.TEXT);
+        if (npcText != null && !npcText.isHidden()) {
+            return true;
+        }
+        Widget options = client.getWidget(InterfaceID.Chatmenu.OPTIONS);
+        return options != null && !options.isHidden();
     }
 
     private void updateDeposited(ItemContainerState newState, ItemContainerState previousState) {

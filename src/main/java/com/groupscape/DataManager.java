@@ -70,6 +70,10 @@ public class DataManager {
     private final KillLootDeathEvents killLootDeathEvents = new KillLootDeathEvents();
     @Getter
     private final ObjectInteractionEvents objectInteractionEvents = new ObjectInteractionEvents();
+    @Getter
+    private final InteractionEvents interactionEvents = new InteractionEvents();
+    @Getter
+    private final NpcDialogueTracker npcDialogueTracker = new NpcDialogueTracker();
 
     public void submitToApi() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
@@ -122,6 +126,7 @@ public class DataManager {
             collectionLogV2Manager.consumeClogItems(updates);
             killLootDeathEvents.consumeState(updates);
             objectInteractionEvents.consumeState(updates);
+            interactionEvents.consumeState(updates);
 
             if (updates.size() > 1) {
                 HttpRequestService.HttpResponse response = httpRequestService.post(url, groupToken, updates);
@@ -206,6 +211,7 @@ public class DataManager {
         richPresence.restoreState();
         killLootDeathEvents.restoreState();
         objectInteractionEvents.restoreState();
+        interactionEvents.restoreState();
     }
 
     private String baseUrl() {

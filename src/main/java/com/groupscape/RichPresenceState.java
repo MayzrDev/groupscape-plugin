@@ -15,13 +15,17 @@ public class RichPresenceState implements ConsumableState {
     private final String text;
     private final transient String playerName;
 
-    RichPresenceState(String playerName, Client client) {
+    RichPresenceState(String playerName, Client client, NpcDialogueTracker dialogueTracker) {
         this.playerName = playerName;
-        this.text = computeText(client);
+        this.text = computeText(client, dialogueTracker);
     }
 
-    /** Exposed so the party overlay can compute the same text for the local player's own row. */
-    public static String computeText(Client client) {
+    /**
+     * Exposed so the party overlay can compute the same text for the local player's own row.
+     * {@code dialogueTracker} may be null (falls back to the pre-tracker behavior of going idle
+     * the instant a dialogue box swallows {@code getInteracting()}'s target).
+     */
+    public static String computeText(Client client, NpcDialogueTracker dialogueTracker) {
         Player player = client.getLocalPlayer();
         if (player == null) {
             return null;
@@ -42,6 +46,13 @@ public class RichPresenceState implements ConsumableState {
             }
 
             return (combatLevel > 0 ? "Fighting " : "Talking to ") + name;
+        }
+
+        // getInteracting() has already gone null once the dialogue box is actually open (see
+        // NpcDialogueTracker) but the box is still up, so the player is still talking to
+        // whoever they last targeted.
+        if (dialogueTracker != null && dialogueTracker.lastNpcName() != null) {
+            return "Talking to " + dialogueTracker.lastNpcName();
         }
 
         if (client.getWidget(InterfaceID.Bankmain.ITEMS) != null) {

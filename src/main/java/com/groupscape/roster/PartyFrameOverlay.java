@@ -1,6 +1,7 @@
 package com.groupscape.roster;
 
 import com.groupscape.GroupScapeTrackerConfig;
+import com.groupscape.NpcDialogueTracker;
 import com.groupscape.RichPresenceState;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -54,11 +55,13 @@ public class PartyFrameOverlay extends Overlay {
     private final Client client;
     private final GroupScapeTrackerConfig config;
     private final RosterState rosterState;
+    private final NpcDialogueTracker dialogueTracker;
 
-    public PartyFrameOverlay(Client client, GroupScapeTrackerConfig config, RosterState rosterState) {
+    public PartyFrameOverlay(Client client, GroupScapeTrackerConfig config, RosterState rosterState, NpcDialogueTracker dialogueTracker) {
         this.client = client;
         this.config = config;
         this.rosterState = rosterState;
+        this.dialogueTracker = dialogueTracker;
         setPosition(OverlayPosition.TOP_LEFT);
         setLayer(OverlayLayer.ABOVE_WIDGETS);
         setPriority(OverlayPriority.LOW);
@@ -130,7 +133,7 @@ public class PartyFrameOverlay extends Overlay {
         self.specEnergy = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT) / 10;
         self.world = client.getWorld();
         self.lastHeartbeatAt = Instant.now();
-        self.richPresence = RichPresenceState.computeText(client);
+        self.richPresence = RichPresenceState.computeText(client, dialogueTracker);
         self.activePrayers = new ActivePrayersStateReader(client).activePrayerNames();
         return self;
     }
