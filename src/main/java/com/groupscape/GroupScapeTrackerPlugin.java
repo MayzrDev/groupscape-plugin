@@ -80,6 +80,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
+    private boolean lowHpAlertArmed = true;
+    private boolean wasInWilderness = false;
+    private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
+    private static final double LOW_HP_REARM_THRESHOLD = 0.5;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
     private static final int SECONDS_BETWEEN_INFREQUENT_DATA_CHANGES = 60;
     private static final int SECONDS_BETWEEN_PORTRAIT_BACKSTOP = 300;
@@ -287,6 +291,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     public void onGameTick(GameTick gameTick) {
         --itemsDeposited;
         updateInteracting();
+        checkWildernessEntry();
 
         Widget groupStorageLoaderText = client.getWidget(GROUP_STORAGE_LOADER, 1);
         if (groupStorageLoaderText != null) {
@@ -302,6 +307,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
             return;
         String playerName = client.getLocalPlayer().getName();
         dataManager.getSkills().update(new SkillState(playerName, client));
+
+        if (statChanged.getSkill() == Skill.HITPOINTS) {
+            checkLowHpAlert(playerName, statChanged.getBoostedLevel(), statChanged.getLevel());
+        }
     }
 
     @Subscribe
@@ -400,6 +409,51 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getObjectInteractionEvents().onObjectInteraction(
                 local.getName(), event.getId(), objectName, event.getMenuOption(),
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+    }
+
+    /**
+     * Fires once when HP ratio drops below {@link #LOW_HP_ALERT_THRESHOLD}, then re-arms only
+     * once it recovers past {@link #LOW_HP_REARM_THRESHOLD} - the gap between the two thresholds
+     * is hysteresis so HP oscillating right at the alert line (poison, repeated small hits)
+     * doesn't fire a fresh alert on every tick.
+     */
+    private void checkLowHpAlert(String playerName, int currentHp, int maxHp) {
+        if (maxHp <= 0) return;
+        double ratio = (double) currentHp / maxHp;
+
+        if (lowHpAlertArmed && ratio < LOW_HP_ALERT_THRESHOLD) {
+            lowHpAlertArmed = false;
+            Player local = client.getLocalPlayer();
+            WorldPoint wp = local == null ? null : local.getWorldLocation();
+            int worldX = wp == null ? -1 : wp.getX();
+            int worldY = wp == null ? -1 : wp.getY();
+            int plane = wp == null ? -1 : wp.getPlane();
+            dataManager.getAlertEvents().onLowHp(playerName, currentHp, maxHp, worldX, worldY, plane, client.getWorld());
+        } else if (!lowHpAlertArmed && ratio >= LOW_HP_REARM_THRESHOLD) {
+            lowHpAlertArmed = true;
+        }
+    }
+
+    /**
+     * {@code Varbits.IN_WILDERNESS} holds the current wilderness level (0 outside it) - the same
+     * value the in-game wilderness widget displays - so polling it once per tick here is simpler
+     * than filtering {@code VarbitChanged} for the one varbit we care about.
+     */
+    private void checkWildernessEntry() {
+        if (doNotUseThisData()) return;
+
+        int wildernessLevel = client.getVarbitValue(Varbits.IN_WILDERNESS);
+        boolean nowInWilderness = wildernessLevel > 0;
+
+        if (nowInWilderness && !wasInWilderness) {
+            Player local = client.getLocalPlayer();
+            WorldPoint wp = local == null ? null : local.getWorldLocation();
+            if (local != null && local.getName() != null && wp != null) {
+                dataManager.getAlertEvents().onWildernessEntry(
+                        local.getName(), wildernessLevel, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+            }
+        }
+        wasInWilderness = nowInWilderness;
     }
 
     @Subscribe

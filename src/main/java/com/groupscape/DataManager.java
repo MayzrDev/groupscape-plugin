@@ -74,6 +74,8 @@ public class DataManager {
     private final InteractionEvents interactionEvents = new InteractionEvents();
     @Getter
     private final NpcDialogueTracker npcDialogueTracker = new NpcDialogueTracker();
+    @Getter
+    private final AlertEvents alertEvents = new AlertEvents();
 
     public void submitToApi() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
@@ -127,6 +129,7 @@ public class DataManager {
             killLootDeathEvents.consumeState(updates);
             objectInteractionEvents.consumeState(updates);
             interactionEvents.consumeState(updates);
+            alertEvents.consumeState(updates);
 
             if (updates.size() > 1) {
                 HttpRequestService.HttpResponse response = httpRequestService.post(url, groupToken, updates);
@@ -212,6 +215,7 @@ public class DataManager {
         killLootDeathEvents.restoreState();
         objectInteractionEvents.restoreState();
         interactionEvents.restoreState();
+        alertEvents.restoreState();
     }
 
     private String baseUrl() {
