@@ -231,6 +231,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         String playerName = client.getLocalPlayer().getName();
         dataManager.getQuests().update(new QuestState(playerName, client));
         dataManager.getAchievementDiary().update(new AchievementDiaryState(playerName, client));
+        dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
     }
 
     @Schedule(

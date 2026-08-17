@@ -10,6 +10,7 @@ import javax.inject.Singleton;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 
 @Slf4j
 @Singleton
@@ -22,6 +23,8 @@ public class DataManager {
     private CollectionLogV2Manager collectionLogV2Manager;
     @Inject
     private HttpRequestService httpRequestService;
+    @Inject
+    private ScheduledExecutorService executor;
     private boolean isMemberInGroup = false;
     private int skipNextNAttempts = 0;
 
@@ -53,6 +56,8 @@ public class DataManager {
     private final DataState potionStorage = new DataState("potion_storage", false);
     @Getter
     private final DataState achievementDiary = new DataState("diary_vars", false);
+    @Getter
+    private final DataState combatAchievements = new DataState("combat_achievements", false);
     @Getter
     private final DataState specialAttack = new DataState("special_attack", false);
     @Getter
@@ -106,6 +111,7 @@ public class DataManager {
             seedVault.consumeState(updates);
             potionStorage.consumeState(updates);
             achievementDiary.consumeState(updates);
+            combatAchievements.consumeState(updates);
             specialAttack.consumeState(updates);
             activePrayers.consumeState(updates);
             richPresence.consumeState(updates);
@@ -145,15 +151,21 @@ public class DataManager {
         String url = getUpdatePortraitUrl(playerName);
         if (url == null) return;
 
-        HttpRequestService.HttpResponse response =
-                httpRequestService.postBytes(url, groupToken, mesh, "application/octet-stream");
+        // capture() runs on the client thread (needed to read the live Model), but OkHttp's
+        // blocking call() is not allowed there - RuneLite throws "Blocking network calls are
+        // not allowed on the client thread" and the upload silently never lands. Everything
+        // above this point only touches client-thread state, so hand off just the network call.
+        executor.execute(() -> {
+            HttpRequestService.HttpResponse response =
+                    httpRequestService.postBytes(url, groupToken, mesh, "application/octet-stream");
 
-        if (!response.isSuccessful()) {
-            log.debug("Portrait upload failed ({} bytes): {} {}", mesh.length, response.getCode(), response.getBody());
-            if (response.getCode() == 401) {
-                isMemberInGroup = false;
+            if (!response.isSuccessful()) {
+                log.debug("Portrait upload failed ({} bytes): {} {}", mesh.length, response.getCode(), response.getBody());
+                if (response.getCode() == 401) {
+                    isMemberInGroup = false;
+                }
             }
-        }
+        });
     }
 
     private boolean checkIfPlayerIsInGroup(String groupToken, String playerName) {
@@ -182,6 +194,7 @@ public class DataManager {
         seedVault.restoreState();
         potionStorage.restoreState();
         achievementDiary.restoreState();
+        combatAchievements.restoreState();
         specialAttack.restoreState();
         activePrayers.restoreState();
         richPresence.restoreState();
