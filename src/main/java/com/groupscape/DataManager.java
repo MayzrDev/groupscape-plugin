@@ -241,7 +241,8 @@ public class DataManager {
 
         if (baseUrl == null || groupName == null) return null;
 
-        return String.format("%s/api/group/%s/am-i-in-group?member_name=%s", baseUrl, groupName, playerName);
+        return String.format(
+                "%s/api/group/%s/am-i-in-group?member_name=%s", baseUrl, groupName, urlEncode(playerName));
     }
 
     private String getUpdatePortraitUrl(String playerName) {
@@ -250,7 +251,23 @@ public class DataManager {
 
         if (baseUrl == null || groupName == null) return null;
 
-        return String.format("%s/api/group/%s/update-portrait/%s", baseUrl, groupName, playerName);
+        return String.format("%s/api/group/%s/update-portrait/%s", baseUrl, groupName, urlEncodePathSegment(playerName));
+    }
+
+    // RuneScape names can contain spaces (e.g. "Zezima 1"), which OkHttp's Request.Builder.url()
+    // rejects unencoded, silently failing the request before it's ever sent.
+    private static String urlEncode(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return value;
+        }
+    }
+
+    // URLEncoder is query-string encoding (space -> '+'); a path segment needs percent-encoding
+    // (space -> "%20") since actix percent-decodes path segments but won't treat '+' as a space.
+    private static String urlEncodePathSegment(String value) {
+        return urlEncode(value).replace("+", "%20");
     }
 
     private boolean isBadWorldType() {
