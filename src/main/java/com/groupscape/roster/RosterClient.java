@@ -13,7 +13,7 @@ import okhttp3.WebSocketListener;
 
 /**
  * Real-time roster feed for the party overlay. Connects to the server's
- * `/api/group/{groupName}/ws` endpoint using the same group-token
+ * `/api/characters/{accountHash}/ws` endpoint using the same API-key
  * `Authorization` header as the plugin's existing HTTP telemetry POSTs, gets
  * one `roster_snapshot` handshake, then applies `vitals_update` deltas as
  * they arrive. Auto-reconnects with a fixed delay on any close/failure.
@@ -36,8 +36,8 @@ public class RosterClient {
 
     private WebSocket webSocket;
     private volatile boolean intentionallyClosed = true;
-    private String connectedGroupName;
-    private String connectedToken;
+    private String connectedAccountHash;
+    private String connectedApiKey;
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState) {
         this.okHttpClient = okHttpClient;
@@ -45,27 +45,27 @@ public class RosterClient {
         this.rosterState = rosterState;
     }
 
-    /** No-op if already connected to this exact group+token. */
-    public synchronized void connect(String baseUrl, String groupName, String token) {
-        if (baseUrl == null || groupName == null || token == null || token.trim().isEmpty()) {
+    /** No-op if already connected to this exact accountHash+apiKey. */
+    public synchronized void connect(String baseUrl, String accountHash, String apiKey) {
+        if (baseUrl == null || accountHash == null || apiKey == null || apiKey.trim().isEmpty()) {
             disconnect();
             return;
         }
-        if (webSocket != null && groupName.equals(connectedGroupName) && token.equals(connectedToken)) {
+        if (webSocket != null && accountHash.equals(connectedAccountHash) && apiKey.equals(connectedApiKey)) {
             return;
         }
 
         disconnect();
         intentionallyClosed = false;
-        connectedGroupName = groupName;
-        connectedToken = token;
-        openSocket(baseUrl, groupName, token);
+        connectedAccountHash = accountHash;
+        connectedApiKey = apiKey;
+        openSocket(baseUrl, accountHash, apiKey);
     }
 
     public synchronized void disconnect() {
         intentionallyClosed = true;
-        connectedGroupName = null;
-        connectedToken = null;
+        connectedAccountHash = null;
+        connectedApiKey = null;
         if (webSocket != null) {
             webSocket.close(1000, "client disconnect");
             webSocket = null;
@@ -78,9 +78,9 @@ public class RosterClient {
         reconnectExecutor.shutdownNow();
     }
 
-    private void openSocket(String baseUrl, String groupName, String token) {
-        String wsUrl = toWebSocketUrl(baseUrl) + "/api/group/" + groupName + "/ws";
-        Request request = new Request.Builder().url(wsUrl).header("Authorization", token).build();
+    private void openSocket(String baseUrl, String accountHash, String apiKey) {
+        String wsUrl = toWebSocketUrl(baseUrl) + "/api/characters/" + accountHash + "/ws";
+        Request request = new Request.Builder().url(wsUrl).header("Authorization", apiKey).build();
 
         webSocket = okHttpClient.newWebSocket(request, new WebSocketListener() {
             @Override
@@ -90,13 +90,13 @@ public class RosterClient {
 
             @Override
             public void onClosed(WebSocket webSocket, int code, String reason) {
-                scheduleReconnect(baseUrl, groupName, token);
+                scheduleReconnect(baseUrl, accountHash, apiKey);
             }
 
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, Response response) {
                 log.debug("Party overlay WebSocket failure: {}", t.toString());
-                scheduleReconnect(baseUrl, groupName, token);
+                scheduleReconnect(baseUrl, accountHash, apiKey);
             }
         });
     }
@@ -134,14 +134,14 @@ public class RosterClient {
         }
     }
 
-    private synchronized void scheduleReconnect(String baseUrl, String groupName, String token) {
+    private synchronized void scheduleReconnect(String baseUrl, String accountHash, String apiKey) {
         if (intentionallyClosed) return;
         reconnectExecutor.schedule(() -> {
             synchronized (this) {
                 if (!intentionallyClosed
-                        && groupName.equals(connectedGroupName)
-                        && token.equals(connectedToken)) {
-                    openSocket(baseUrl, groupName, token);
+                        && accountHash.equals(connectedAccountHash)
+                        && apiKey.equals(connectedApiKey)) {
+                    openSocket(baseUrl, accountHash, apiKey);
                 }
             }
         }, RECONNECT_DELAY_SECONDS, TimeUnit.SECONDS);

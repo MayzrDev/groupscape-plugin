@@ -8,8 +8,8 @@ import net.runelite.client.config.ConfigSection;
 @ConfigGroup("GroupScapeTracker")
 public interface GroupScapeTrackerConfig extends Config {
     @ConfigSection(
-            name = "Group Config",
-            description = "Enter the group token you created on the website here",
+            name = "Account Config",
+            description = "Enter the API key from your account page on the website here",
             position = 0
     )
     String groupSection = "GroupSection";
@@ -23,13 +23,13 @@ public interface GroupScapeTrackerConfig extends Config {
     String connectionSection = "ConnectionSection";
 
     @ConfigItem(
-            keyName = "groupToken",
-            name = "Group Token",
-            description = "Secret token for your group provided by the website. This links you to your group, get it from the member which created the group on the site, or create a new one by visiting the site.",
+            keyName = "apiKey",
+            name = "API Key",
+            description = "Your account's secret API key. Get it from your account page on the website; the plugin uses it to authenticate every request and automatically link this character.",
             secret = true,
             section = groupSection
     )
-    default String authorizationToken() {
+    default String apiKey() {
         return "";
     }
 

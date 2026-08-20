@@ -82,14 +82,14 @@ public class DataManager {
         if (skipNextNAttempts-- > 0) return;
 
         String playerName = client.getLocalPlayer().getName();
-        String groupToken = config.authorizationToken().trim();
+        String apiKey = config.apiKey().trim();
 
-        if (groupToken.length() > 0) {
+        if (apiKey.length() > 0) {
             // NOTE: We do this check so characters who are not authorized won't waste time serializing and sending
             // their data. It is OK if the user switches characters or is removed from the group since the update call
-            // below will return a 401 where we set isMemberOfGroup = false again.
+            // below will return a 401/403 where we set isMemberOfGroup = false again.
             if (!isMemberInGroup) {
-                boolean isMember = checkIfPlayerIsInGroup(groupToken, playerName);
+                boolean isMember = checkIfPlayerIsInGroup(apiKey, playerName);
 
                 if (!isMember) {
                     // NOTE: We don't really need to check this everytime I don't think.
@@ -132,11 +132,11 @@ public class DataManager {
             alertEvents.consumeState(updates);
 
             if (updates.size() > 1) {
-                HttpRequestService.HttpResponse response = httpRequestService.post(url, groupToken, updates);
+                HttpRequestService.HttpResponse response = httpRequestService.post(url, apiKey, updates);
 
                 if (!response.isSuccessful()) {
                     skipNextNAttempts = 10;
-                    if (response.getCode() == 401) {
+                    if (response.getCode() == 401 || response.getCode() == 403) {
                         isMemberInGroup = false;
                     }
                     restoreStateIfNothingUpdated();
@@ -153,14 +153,14 @@ public class DataManager {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
 
         String playerName = client.getLocalPlayer().getName();
-        String groupToken = config.authorizationToken().trim();
+        String apiKey = config.apiKey().trim();
         // Unlike submitToApi(), don't gate on isMemberInGroup here: the mesh is already
         // serialized by the time we get here, so there's no work to save by waiting for that
         // flag, and captures happen too rarely (login/equip-change/5min backstop) to risk losing
         // one to the flag not having been confirmed true yet. The /update-portrait route is
-        // behind the same Authenticated middleware as everything else, so a bad token still
+        // behind the same Authenticated middleware as everything else, so a bad key still
         // fails safely below.
-        if (groupToken.isEmpty()) return;
+        if (apiKey.isEmpty()) return;
 
         String url = getUpdatePortraitUrl(playerName);
         if (url == null) return;
@@ -171,22 +171,45 @@ public class DataManager {
         // above this point only touches client-thread state, so hand off just the network call.
         executor.execute(() -> {
             HttpRequestService.HttpResponse response =
-                    httpRequestService.postBytes(url, groupToken, mesh, "application/octet-stream");
+                    httpRequestService.postBytes(url, apiKey, mesh, "application/octet-stream");
 
             if (!response.isSuccessful()) {
                 log.debug("Portrait upload failed ({} bytes): {} {}", mesh.length, response.getCode(), response.getBody());
-                if (response.getCode() == 401) {
+                if (response.getCode() == 401 || response.getCode() == 403) {
                     isMemberInGroup = false;
                 }
             }
         });
     }
 
-    private boolean checkIfPlayerIsInGroup(String groupToken, String playerName) {
+    /**
+     * Lets the server learn this character's RSN even before it has been linked to a group -
+     * needed for a website confirmation UI. Cheap and idempotent, so it's fine to call on the
+     * same ~1s cadence as the rest of the periodic reconciliation. Called from the client thread
+     * (see reconcileRosterConnection()), so - like uploadPortrait() - the actual network call is
+     * handed off to the executor rather than blocking here.
+     */
+    public void identify() {
+        if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null) return;
+
+        String apiKey = config.apiKey().trim();
+        if (apiKey.isEmpty()) return;
+
+        String url = getIdentifyUrl();
+        if (url == null) return;
+
+        String playerName = client.getLocalPlayer().getName();
+        Map<String, Object> body = new HashMap<>();
+        body.put("rsn", playerName);
+
+        executor.execute(() -> httpRequestService.post(url, apiKey, body));
+    }
+
+    private boolean checkIfPlayerIsInGroup(String apiKey, String playerName) {
         String url = amIMemberOfGroupUrl(playerName);
         if (url == null) return false;
 
-        HttpRequestService.HttpResponse response = httpRequestService.get(url, groupToken);
+        HttpRequestService.HttpResponse response = httpRequestService.get(url, apiKey);
 
         return response.isSuccessful();
     }
@@ -222,36 +245,49 @@ public class DataManager {
         return httpRequestService.getBaseUrl();
     }
 
-    private String groupName() {
-        return GroupToken.parseGroupName(config.authorizationToken());
+    /** Returns null (matching the old "missing config" guard) when the account hash isn't ready yet. */
+    private String accountHash() {
+        long accountHash = client.getAccountHash();
+        if (accountHash == -1) return null;
+
+        return String.valueOf(accountHash);
     }
 
     private String getUpdateGroupMemberUrl() {
         String baseUrl = baseUrl();
-        String groupName = groupName();
+        String accountHash = accountHash();
 
-        if (baseUrl == null || groupName == null) return null;
+        if (baseUrl == null || accountHash == null) return null;
 
-        return String.format("%s/api/group/%s/update-group-member", baseUrl, groupName);
+        return String.format("%s/api/characters/%s/update-group-member", baseUrl, accountHash);
     }
 
     private String amIMemberOfGroupUrl(String playerName) {
         String baseUrl = baseUrl();
-        String groupName = groupName();
+        String accountHash = accountHash();
 
-        if (baseUrl == null || groupName == null) return null;
+        if (baseUrl == null || accountHash == null) return null;
 
         return String.format(
-                "%s/api/group/%s/am-i-in-group?member_name=%s", baseUrl, groupName, urlEncode(playerName));
+                "%s/api/characters/%s/am-i-in-group?member_name=%s", baseUrl, accountHash, urlEncode(playerName));
     }
 
     private String getUpdatePortraitUrl(String playerName) {
         String baseUrl = baseUrl();
-        String groupName = groupName();
+        String accountHash = accountHash();
 
-        if (baseUrl == null || groupName == null) return null;
+        if (baseUrl == null || accountHash == null) return null;
 
-        return String.format("%s/api/group/%s/update-portrait/%s", baseUrl, groupName, urlEncodePathSegment(playerName));
+        return String.format("%s/api/characters/%s/update-portrait/%s", baseUrl, accountHash, urlEncodePathSegment(playerName));
+    }
+
+    private String getIdentifyUrl() {
+        String baseUrl = baseUrl();
+        String accountHash = accountHash();
+
+        if (baseUrl == null || accountHash == null) return null;
+
+        return String.format("%s/api/characters/%s/identify", baseUrl, accountHash);
     }
 
     // RuneScape names can contain spaces (e.g. "Zezima 1"), which OkHttp's Request.Builder.url()

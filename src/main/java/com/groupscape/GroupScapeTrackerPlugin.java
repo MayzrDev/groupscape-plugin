@@ -24,18 +24,10 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 import net.runelite.client.task.Schedule;
-import net.runelite.client.ui.ClientToolbar;
-import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
-import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import javax.inject.Inject;
-import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.image.BufferedImage;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -69,13 +61,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private OkHttpClient okHttpClient;
     @Inject
     private Gson gson;
-    @Inject
-    private ClientToolbar clientToolbar;
     private RosterState rosterState;
     private RosterClient rosterClient;
     private PartyFrameOverlay partyFrameOverlay;
-    private GroupScapePanel panel;
-    private NavigationButton navigationButton;
     private int itemsDeposited = 0;
     private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
@@ -102,16 +90,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
 
-        panel = new GroupScapePanel();
-        panel.setLinkCharacterListener(this::onLinkCharacterClicked);
-        navigationButton = NavigationButton.builder()
-                .tooltip("GroupScape")
-                .icon(buildIcon())
-                .priority(5)
-                .panel(panel)
-                .build();
-        clientToolbar.addNavigation(navigationButton);
-
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
 
@@ -129,67 +107,28 @@ public class GroupScapeTrackerPlugin extends Plugin {
             rosterClient.shutdown();
             rosterClient = null;
         }
-        if (navigationButton != null) {
-            clientToolbar.removeNavigation(navigationButton);
-            navigationButton = null;
-            panel = null;
-        }
 
         log.info("GroupScape Tracker stopped!");
     }
 
     /**
-     * Opens the website's {@code /link} page carrying this character's account hash + RSN — the
-     * site's already-authenticated session does the actual linking, so the plugin has nothing to
-     * POST and no pass/fail result to show; confirmation happens entirely in the browser tab
-     * this opens.
+     * Connects/reconnects the party overlay's WebSocket whenever the configured API key or the
+     * client's account hash changes. Linking to a character/group now happens automatically on
+     * the server the moment it sees this accountHash + apiKey pair, so there's nothing else to do
+     * here.
      */
-    private void onLinkCharacterClicked() {
-        long accountHash = client.getAccountHash();
-        Player local = client.getLocalPlayer();
-        if (accountHash == -1 || local == null || local.getName() == null) {
-            return;
-        }
-
-        String url = httpRequestService.getBaseUrl() + "/link?accountHash="
-                + urlEncode(String.valueOf(accountHash)) + "&rsn=" + urlEncode(local.getName());
-        try {
-            LinkBrowser.browse(url);
-        } catch (RuntimeException e) {
-            log.warn("GroupScape failed to open the link page: {}", e.getMessage());
-        }
-    }
-
-    private static String urlEncode(String value) {
-        try {
-            return URLEncoder.encode(value, "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            return value;
-        }
-    }
-
-    private static BufferedImage buildIcon() {
-        BufferedImage icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = icon.createGraphics();
-        g.setColor(new Color(0x1F7A4D));
-        g.fillRoundRect(1, 1, 14, 14, 4, 4);
-        g.setColor(Color.WHITE);
-        g.fillOval(5, 5, 6, 6);
-        g.dispose();
-        return icon;
-    }
-
-    /** Connects/reconnects the party overlay's WebSocket whenever the configured group or token changes. */
     private void reconcileRosterConnection() {
-        String token = config.authorizationToken().trim();
-        String groupName = GroupToken.parseGroupName(token);
+        dataManager.identify();
 
-        if (groupName == null || groupName.isEmpty() || token.isEmpty()) {
+        String apiKey = config.apiKey().trim();
+        long accountHashValue = client.getAccountHash();
+
+        if (apiKey.isEmpty() || accountHashValue == -1) {
             rosterClient.disconnect();
             return;
         }
 
-        rosterClient.connect(httpRequestService.getBaseUrl(), groupName, token);
+        rosterClient.connect(httpRequestService.getBaseUrl(), String.valueOf(accountHashValue), apiKey);
     }
 
     @Schedule(
