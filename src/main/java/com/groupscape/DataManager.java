@@ -25,7 +25,6 @@ public class DataManager {
     private HttpRequestService httpRequestService;
     @Inject
     private ScheduledExecutorService executor;
-    private boolean isMemberInGroup = false;
     private int skipNextNAttempts = 0;
 
     @Getter
@@ -85,22 +84,6 @@ public class DataManager {
         String apiKey = config.apiKey().trim();
 
         if (apiKey.length() > 0) {
-            // NOTE: We do this check so characters who are not authorized won't waste time serializing and sending
-            // their data. It is OK if the user switches characters or is removed from the group since the update call
-            // below will return a 401/403 where we set isMemberOfGroup = false again.
-            if (!isMemberInGroup) {
-                boolean isMember = checkIfPlayerIsInGroup(apiKey, playerName);
-
-                if (!isMember) {
-                    // NOTE: We don't really need to check this everytime I don't think.
-                    // Waiting for a game state event is not what we really want either
-                    // since membership can change at anytime from the website.
-                    skipNextNAttempts = 10;
-                    return;
-                }
-                isMemberInGroup = true;
-            }
-
             String url = getUpdateGroupMemberUrl();
             if (url == null) return;
 
@@ -136,9 +119,6 @@ public class DataManager {
 
                 if (!response.isSuccessful()) {
                     skipNextNAttempts = 10;
-                    if (response.getCode() == 401 || response.getCode() == 403) {
-                        isMemberInGroup = false;
-                    }
                     restoreStateIfNothingUpdated();
                 } else {
                     collectionLogV2Manager.clearClogItems();
@@ -154,12 +134,8 @@ public class DataManager {
 
         String playerName = client.getLocalPlayer().getName();
         String apiKey = config.apiKey().trim();
-        // Unlike submitToApi(), don't gate on isMemberInGroup here: the mesh is already
-        // serialized by the time we get here, so there's no work to save by waiting for that
-        // flag, and captures happen too rarely (login/equip-change/5min backstop) to risk losing
-        // one to the flag not having been confirmed true yet. The /update-portrait route is
-        // behind the same Authenticated middleware as everything else, so a bad key still
-        // fails safely below.
+        // The /update-portrait route is behind the same Authenticated middleware as everything
+        // else, so a bad key or an unlinked character still fails safely below.
         if (apiKey.isEmpty()) return;
 
         String url = getUpdatePortraitUrl(playerName);
@@ -175,9 +151,6 @@ public class DataManager {
 
             if (!response.isSuccessful()) {
                 log.debug("Portrait upload failed ({} bytes): {} {}", mesh.length, response.getCode(), response.getBody());
-                if (response.getCode() == 401 || response.getCode() == 403) {
-                    isMemberInGroup = false;
-                }
             }
         });
     }
@@ -203,15 +176,6 @@ public class DataManager {
         body.put("rsn", playerName);
 
         executor.execute(() -> httpRequestService.post(url, apiKey, body));
-    }
-
-    private boolean checkIfPlayerIsInGroup(String apiKey, String playerName) {
-        String url = amIMemberOfGroupUrl(playerName);
-        if (url == null) return false;
-
-        HttpRequestService.HttpResponse response = httpRequestService.get(url, apiKey);
-
-        return response.isSuccessful();
     }
 
     // NOTE: These states should only be restored if a new update did not come in at some point before calling this
@@ -260,16 +224,6 @@ public class DataManager {
         if (baseUrl == null || accountHash == null) return null;
 
         return String.format("%s/api/characters/%s/update-group-member", baseUrl, accountHash);
-    }
-
-    private String amIMemberOfGroupUrl(String playerName) {
-        String baseUrl = baseUrl();
-        String accountHash = accountHash();
-
-        if (baseUrl == null || accountHash == null) return null;
-
-        return String.format(
-                "%s/api/characters/%s/am-i-in-group?member_name=%s", baseUrl, accountHash, urlEncode(playerName));
     }
 
     private String getUpdatePortraitUrl(String playerName) {
