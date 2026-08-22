@@ -23,10 +23,18 @@ public class RosterClient {
     private static final int RECONNECT_DELAY_SECONDS = 5;
     private static final String ROSTER_SNAPSHOT = "roster_snapshot";
     private static final String VITALS_UPDATE = "vitals_update";
+    private static final String KILL_EVENT = "kill_event";
+    private static final String COLOR_UPDATE = "color_update";
+
+    /** Notified when another group member's kill arrives over the websocket. */
+    public interface KillEventListener {
+        void onKillEvent(String memberName, String npcName);
+    }
 
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
+    private final KillEventListener killEventListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "groupscape-roster-reconnect");
@@ -39,10 +47,11 @@ public class RosterClient {
     private String connectedAccountHash;
     private String connectedApiKey;
 
-    public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState) {
+    public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener) {
         this.okHttpClient = okHttpClient;
         this.gson = gson;
         this.rosterState = rosterState;
+        this.killEventListener = killEventListener;
     }
 
     /** No-op if already connected to this exact accountHash+apiKey. */
@@ -127,6 +136,18 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.VitalsUpdatePayload.class);
                 if (payload.name != null) {
                     rosterState.getOrCreate(payload.name).applyVitals(payload.vitals);
+                }
+            } else if (KILL_EVENT.equals(envelope.type)) {
+                RosterWireTypes.KillEventPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.KillEventPayload.class);
+                if (payload.memberName != null && payload.npcName != null) {
+                    killEventListener.onKillEvent(payload.memberName, payload.npcName);
+                }
+            } else if (COLOR_UPDATE.equals(envelope.type)) {
+                RosterWireTypes.ColorUpdatePayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.ColorUpdatePayload.class);
+                if (payload.name != null && payload.color != null) {
+                    rosterState.getOrCreate(payload.name).color = payload.color;
                 }
             }
         } catch (Exception e) {

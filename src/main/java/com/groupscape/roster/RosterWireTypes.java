@@ -30,6 +30,16 @@ public class RosterWireTypes {
         public WireVitals vitals;
     }
 
+    public static class KillEventPayload {
+        public String memberName;
+        public String npcName;
+    }
+
+    public static class ColorUpdatePayload {
+        public String name;
+        public String color;
+    }
+
     public static class WireVitals {
         public Integer hp;
         public Integer maxHp;
