@@ -6,6 +6,9 @@ import java.util.List;
 
 /** Mutable per-member vitals snapshot the overlay renders from. */
 public class RosterMember {
+    /** Shared by {@code PartyFrameOverlay} and {@code RosterNotifier} so both agree on "offline". */
+    public static final long OFFLINE_THRESHOLD_MS = 60_000;
+
     public final String name;
     public String color = "#808080";
 

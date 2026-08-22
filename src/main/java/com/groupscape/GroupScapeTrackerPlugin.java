@@ -4,6 +4,8 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import com.groupscape.roster.PartyFrameOverlay;
 import com.groupscape.roster.RosterClient;
+import com.groupscape.roster.RosterMember;
+import com.groupscape.roster.RosterNotifier;
 import com.groupscape.roster.RosterState;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -15,6 +17,8 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.WorldView;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -25,9 +29,13 @@ import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.http.api.loottracker.LootRecordType;
 import net.runelite.client.task.Schedule;
 import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import javax.inject.Inject;
+import java.awt.Color;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,8 +69,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private OkHttpClient okHttpClient;
     @Inject
     private Gson gson;
+    @Inject
+    private ChatMessageManager chatMessageManager;
     private RosterState rosterState;
     private RosterClient rosterClient;
+    private RosterNotifier rosterNotifier;
     private PartyFrameOverlay partyFrameOverlay;
     private int itemsDeposited = 0;
     private boolean dialogueEventEmitted = false;
@@ -86,7 +97,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
         collectionLogWidgetSubscriber.startUp();
 
         rosterState = new RosterState();
-        rosterClient = new RosterClient(okHttpClient, gson, rosterState);
+        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent);
+        rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
 
@@ -151,6 +163,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             return;
         Player player = client.getLocalPlayer();
         String playerName = player.getName();
+        rosterNotifier.check(rosterState.all(), playerName, config).forEach(this::sendChatMessage);
         dataManager.getResources().update(new ResourcesState(playerName, client));
         dataManager.getSpecialAttack().update(new SpecialAttackState(playerName, client));
         dataManager.getActivePrayers().update(new ActivePrayersState(playerName, client));
@@ -320,6 +333,51 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
     }
 
+    /**
+     * Adds a "Fill join prompt" / "Copy name" entry when right-clicking a group member's name in
+     * {@link PartyFrameOverlay}, so the player can quick-join a friend's house/boss party without
+     * typing their name. "Fill join prompt" writes straight into the native chatbox name-entry
+     * var when one is open (see {@link #isAwaitingChatNameInput()}); otherwise it falls back to
+     * copying the name to the clipboard so the click is never wasted.
+     *
+     * TODO(verify against a live client via RuneLite's Widget Inspector before relying on this):
+     * {@link #isAwaitingChatNameInput()} and {@link #handleQuickJoin} assume the house/boss-party
+     * "enter a friend's name" prompts are ordinary chatbox line input (VarClientInt.INPUT_TYPE /
+     * VarClientStr.CHATBOX_TYPED_TEXT), the same mechanism used for public chat. That assumption
+     * hasn't been confirmed against the live game and may need adjusting per-dialog.
+     */
+    @Subscribe
+    public void onMenuOpened(MenuOpened event) {
+        if (partyFrameOverlay == null) return;
+
+        net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+        RosterMember member = partyFrameOverlay.memberAt(mouse.getX(), mouse.getY());
+        if (member == null) return;
+
+        boolean promptOpen = isAwaitingChatNameInput();
+        String option = promptOpen ? "Fill join prompt" : "Copy name";
+
+        client.createMenuEntry(-1)
+                .setOption(option)
+                .setTarget(ColorUtil.wrapWithColorTag(member.name, Color.YELLOW))
+                .setType(MenuAction.RUNELITE)
+                .onClick(e -> handleQuickJoin(member.name, promptOpen));
+    }
+
+    private boolean isAwaitingChatNameInput() {
+        return client.getVarcIntValue(VarClientInt.INPUT_TYPE) != 0;
+    }
+
+    private void handleQuickJoin(String name, boolean promptOpen) {
+        if (promptOpen) {
+            client.setVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT, name);
+            sendChatMessage("Filled join prompt with \"" + name + "\".");
+        } else {
+            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(name), null);
+            sendChatMessage("Copied \"" + name + "\" to clipboard.");
+        }
+    }
+
     private static boolean isGameObjectAction(MenuAction menuAction) {
         return menuAction == MenuAction.GAME_OBJECT_FIRST_OPTION
                 || menuAction == MenuAction.GAME_OBJECT_SECOND_OPTION
@@ -348,6 +406,25 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getObjectInteractionEvents().onObjectInteraction(
                 local.getName(), event.getId(), objectName, event.getMenuOption(),
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+    }
+
+    /**
+     * Called by {@link RosterClient} when another group member's kill arrives over the party
+     * overlay WebSocket. The local player's own kills are skipped here since the game already
+     * shows them a message.
+     */
+    private void onGroupKillEvent(String memberName, String npcName) {
+        if (!config.notifyBossKill()) return;
+        Player local = client.getLocalPlayer();
+        if (local != null && memberName.equalsIgnoreCase(local.getName())) return;
+        sendChatMessage(memberName + " killed " + npcName + "!");
+    }
+
+    private void sendChatMessage(String message) {
+        chatMessageManager.queue(QueuedMessage.builder()
+                .type(ChatMessageType.CONSOLE)
+                .runeLiteFormattedMessage(message)
+                .build());
     }
 
     /**

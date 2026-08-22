@@ -77,6 +77,7 @@ public class DataManager {
     private final AlertEvents alertEvents = new AlertEvents();
 
     public void submitToApi() {
+        if (config.pauseSync()) return;
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
         if (skipNextNAttempts-- > 0) return;
 
@@ -130,6 +131,7 @@ public class DataManager {
     }
 
     public void uploadPortrait(byte[] mesh) {
+        if (config.pauseSync()) return;
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
 
         String playerName = client.getLocalPlayer().getName();
