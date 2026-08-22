@@ -14,9 +14,11 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.WorldView;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
@@ -71,6 +73,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private Gson gson;
     @Inject
     private ChatMessageManager chatMessageManager;
+    @Inject
+    private ClientThread clientThread;
     private RosterState rosterState;
     private RosterClient rosterClient;
     private RosterNotifier rosterNotifier;
@@ -364,13 +368,31 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 .onClick(e -> handleQuickJoin(member.name, promptOpen));
     }
 
+    /**
+     * 8 is not one of RuneLite's named {@code InputType} constants (PRIVATE_MESSAGE=6, SEARCH=11)
+     * but was confirmed live via the Developer Tools Var Inspector: MESLAYERMODE goes 0 -> 8 the
+     * instant either the house-join or the boss-party-join "Enter a friend's name" prompt opens.
+     */
+    private static final int INPUT_TYPE_NAME_ENTRY = 8;
+
     private boolean isAwaitingChatNameInput() {
-        return client.getVarcIntValue(VarClientInt.INPUT_TYPE) != 0;
+        return client.getVarcIntValue(VarClientID.MESLAYERMODE) == INPUT_TYPE_NAME_ENTRY;
     }
 
+    /**
+     * Mirrors RuneLite core's own {@code ChatKeyboardListener.applyText}: any non-plain-chat input
+     * mode (private message, and by the same logic this name-entry mode) is backed by
+     * {@code MESLAYERINPUT}, not {@code CHATINPUT} - writing to the wrong var was why the first
+     * attempt at this silently did nothing. The chat line also isn't redrawn just because the var
+     * changed; {@code CHAT_TEXT_INPUT_REBUILD} has to be run explicitly afterward, same as core
+     * does for its private-message-mode branch.
+     */
     private void handleQuickJoin(String name, boolean promptOpen) {
         if (promptOpen) {
-            client.setVarcStrValue(VarClientStr.CHATBOX_TYPED_TEXT, name);
+            clientThread.invoke(() -> {
+                client.setVarcStrValue(VarClientID.MESLAYERINPUT, name);
+                client.runScript(ScriptID.CHAT_TEXT_INPUT_REBUILD, "");
+            });
             sendChatMessage("Filled join prompt with \"" + name + "\".");
         } else {
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(name), null);
