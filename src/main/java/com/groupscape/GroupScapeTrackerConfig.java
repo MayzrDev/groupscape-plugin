@@ -169,8 +169,8 @@ public interface GroupScapeTrackerConfig extends Config {
 
     @ConfigItem(
             keyName = "partyOverlayHideTarget",
-            name = "Hide target/activity line",
-            description = "Hide the \"Fighting X\" / \"Talking to X\" / activity line",
+            name = "Hide target bar",
+            description = "Hide the target HP bar (combat target, bank, or NPC being talked to)",
             section = partyOverlaySection,
             position = 10
     )

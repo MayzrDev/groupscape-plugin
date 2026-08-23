@@ -2,9 +2,9 @@ package com.groupscape.roster;
 
 import com.groupscape.GroupScapeTrackerConfig;
 import com.groupscape.NpcDialogueTracker;
-import com.groupscape.RichPresenceState;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.time.Instant;
@@ -13,10 +13,12 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.VarPlayer;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
@@ -65,9 +67,17 @@ public class PartyFrameOverlay extends Overlay {
     private static final Color RUN_COLOR = new Color(76, 175, 80);
     private static final Color SPEC_COLOR = new Color(232, 197, 71);
     private static final Color TRACK_COLOR = new Color(255, 255, 255, 40);
-    private static final Color FIGHTING_COLOR = new Color(240, 128, 128);
-    private static final Color TALKING_COLOR = new Color(120, 180, 240);
-    private static final Color DEFAULT_ACTIVITY_COLOR = new Color(232, 197, 71);
+
+    // Target bar — mirrors the webapp's player-interacting component (red for an actual
+    // combat target, gold for a neutral interaction like banking or talking to an NPC).
+    private static final Color TARGET_COMBAT_FILL = new Color(164, 22, 35);
+    private static final Color TARGET_COMBAT_TRACK = new Color(164, 22, 35, 41);
+    private static final Color TARGET_COMBAT_BORDER = new Color(164, 22, 35, 128);
+    private static final Color TARGET_COMBAT_LABEL = new Color(217, 138, 138);
+    private static final Color TARGET_NEUTRAL_FILL = new Color(140, 98, 18);
+    private static final Color TARGET_NEUTRAL_TRACK = new Color(140, 98, 18, 41);
+    private static final Color TARGET_NEUTRAL_BORDER = new Color(140, 98, 18, 128);
+    private static final Color TARGET_NEUTRAL_LABEL = new Color(217, 184, 119);
 
     private final Client client;
     private final GroupScapeTrackerConfig config;
@@ -213,9 +223,48 @@ public class PartyFrameOverlay extends Overlay {
         self.specEnergy = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT) / 10;
         self.world = client.getWorld();
         self.lastHeartbeatAt = Instant.now();
-        self.richPresence = RichPresenceState.computeText(client, dialogueTracker);
         self.activePrayers = new ActivePrayersStateReader(client).activePrayerNames();
+        applyLocalTarget(self);
         return self;
+    }
+
+    /**
+     * Fills the self row's target fields straight from Client, the same signals
+     * {@link com.groupscape.RichPresenceState} used to build its text ("Fighting X" / "Talking to
+     * X" / "Browsing the bank"), but kept as structured name+ratio+scale so the bar can render an
+     * actual HP fill instead of a static line of text.
+     */
+    private void applyLocalTarget(RosterMember self) {
+        Player player = client.getLocalPlayer();
+
+        Actor interacting = player.getInteracting();
+        if (interacting != null && interacting.getName() != null) {
+            self.targetName = interacting.getName();
+            self.targetHealthScale = interacting.getHealthScale();
+            self.targetHealthRatio = interacting.getHealthRatio();
+            return;
+        }
+
+        // getInteracting() has already gone null once the dialogue box is actually open (see
+        // NpcDialogueTracker) but the box is still up, so the player is still "talking to"
+        // whoever they last targeted.
+        if (dialogueTracker != null && dialogueTracker.lastNpcName() != null) {
+            self.targetName = dialogueTracker.lastNpcName();
+            self.targetHealthScale = 0;
+            self.targetHealthRatio = -1;
+            return;
+        }
+
+        if (client.getWidget(InterfaceID.Bankmain.ITEMS) != null) {
+            self.targetName = "Bank";
+            self.targetHealthScale = 0;
+            self.targetHealthRatio = -1;
+            return;
+        }
+
+        self.targetName = null;
+        self.targetHealthScale = null;
+        self.targetHealthRatio = null;
     }
 
     private void sortMembers(List<RosterMember> members) {
@@ -263,8 +312,8 @@ public class PartyFrameOverlay extends Overlay {
         }
         if (!config.partyOverlayHideRun()) height += barHeight + barGap;
         if (!config.partyOverlayHideSpec()) height += barHeight + barGap;
-        if (!config.partyOverlayHideTarget() && member.richPresence != null && !member.richPresence.isEmpty()) {
-            height += lineHeight;
+        if (!config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
+            height += barHeight + barGap;
         }
         return height + memberGap;
     }
@@ -315,10 +364,9 @@ public class PartyFrameOverlay extends Overlay {
             y += barHeight + barGap;
         }
 
-        if (!config.partyOverlayHideTarget() && member.richPresence != null && !member.richPresence.isEmpty()) {
-            graphics.setColor(activityColor(member.richPresence));
-            graphics.drawString(member.richPresence, textX, y + 10);
-            y += lineHeight;
+        if (!config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
+            drawTargetBar(graphics, textX, y, barWidth, member);
+            y += barHeight + barGap;
         }
 
         if (offline) {
@@ -353,6 +401,78 @@ public class PartyFrameOverlay extends Overlay {
         }
     }
 
+    /**
+     * Renders the "target" row as an HP-style bar instead of plain text, styled to match the
+     * webapp's player-interacting component: red bar filled by HP ratio for an actual combat
+     * target (health scale &gt; 0), full gold bar with no HP text for a neutral interaction
+     * (banking, talking to an NPC). The HP text is reserved a fixed width inside the bar's right
+     * edge so the name can never grow into it - it truncates with an ellipsis instead.
+     */
+    private void drawTargetBar(Graphics2D graphics, int x, int y, int width, RosterMember member) {
+        boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
+        boolean hasRatio = isEnemy && member.targetHealthRatio != null && member.targetHealthRatio >= 0;
+
+        Color fill = isEnemy ? TARGET_COMBAT_FILL : TARGET_NEUTRAL_FILL;
+        Color track = isEnemy ? TARGET_COMBAT_TRACK : TARGET_NEUTRAL_TRACK;
+        Color border = isEnemy ? TARGET_COMBAT_BORDER : TARGET_NEUTRAL_BORDER;
+        Color labelColor = isEnemy ? TARGET_COMBAT_LABEL : TARGET_NEUTRAL_LABEL;
+
+        graphics.setColor(track);
+        graphics.fillRect(x, y, width, barHeight);
+
+        int filledWidth = width;
+        if (hasRatio) {
+            double ratio = Math.max(0, Math.min(1.0, member.targetHealthRatio / (double) member.targetHealthScale));
+            filledWidth = (int) (ratio * width);
+        }
+        graphics.setColor(fill);
+        graphics.fillRect(x, y, filledWidth, barHeight);
+
+        graphics.setColor(border);
+        graphics.drawRect(x, y, width - 1, barHeight - 1);
+
+        String label = "Tgt";
+        graphics.setColor(labelColor);
+        graphics.drawString(label, x + 3, y + barHeight - 2);
+
+        FontMetrics metrics = graphics.getFontMetrics();
+        int nameX = x + metrics.stringWidth(label) + 8;
+
+        String hpText = hasRatio ? member.targetHealthRatio + "/" + member.targetHealthScale : null;
+        int hpReserve = hpText != null ? metrics.stringWidth(hpText) + 6 : 3;
+
+        int nameMaxWidth = Math.max(0, (x + width) - nameX - hpReserve);
+        graphics.setColor(TEXT);
+        graphics.drawString(truncateToWidth(metrics, member.targetName, nameMaxWidth), nameX, y + barHeight - 2);
+
+        if (hpText != null) {
+            graphics.setColor(labelColor);
+            graphics.drawString(hpText, x + width - metrics.stringWidth(hpText) - 3, y + barHeight - 2);
+        }
+    }
+
+    private static String truncateToWidth(FontMetrics metrics, String text, int maxWidth) {
+        if (metrics.stringWidth(text) <= maxWidth) {
+            return text;
+        }
+
+        String ellipsis = "...";
+        int ellipsisWidth = metrics.stringWidth(ellipsis);
+        if (maxWidth <= ellipsisWidth) {
+            return "";
+        }
+
+        StringBuilder truncated = new StringBuilder();
+        for (int i = 0; i < text.length(); i++) {
+            truncated.append(text.charAt(i));
+            if (metrics.stringWidth(truncated.toString()) + ellipsisWidth > maxWidth) {
+                truncated.setLength(truncated.length() - 1);
+                break;
+            }
+        }
+        return truncated + ellipsis;
+    }
+
     private void drawPrayerIcons(Graphics2D graphics, int x, int y, List<String> activePrayers) {
         int iconSize = 10;
         int gap = 2;
@@ -375,12 +495,6 @@ public class PartyFrameOverlay extends Overlay {
         if (parts.length == 0 || parts[0].isEmpty()) return "?";
         if (parts.length == 1) return parts[0].substring(0, Math.min(2, parts[0].length())).toUpperCase();
         return ("" + parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
-    }
-
-    private Color activityColor(String richPresence) {
-        if (richPresence.startsWith("Fighting")) return FIGHTING_COLOR;
-        if (richPresence.startsWith("Talking")) return TALKING_COLOR;
-        return DEFAULT_ACTIVITY_COLOR;
     }
 
     private static Color memberColor(String hex) {
