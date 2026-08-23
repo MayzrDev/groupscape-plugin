@@ -209,7 +209,7 @@ public class PartyFrameOverlay extends Overlay {
         self.maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
         self.prayer = client.getBoostedSkillLevel(Skill.PRAYER);
         self.maxPrayer = client.getRealSkillLevel(Skill.PRAYER);
-        self.runEnergy = client.getEnergy();
+        self.runEnergy = client.getEnergy() / 100;
         self.specEnergy = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT) / 10;
         self.world = client.getWorld();
         self.lastHeartbeatAt = Instant.now();
