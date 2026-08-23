@@ -421,9 +421,13 @@ public class PartyFrameOverlay extends Overlay {
         graphics.setColor(labelColor);
         graphics.drawString("Tgt", x, y + barHeight - 2);
 
+        FontMetrics metrics = graphics.getFontMetrics();
+        String hpText = hasRatio ? member.targetHealthRatio + "/" + member.targetHealthScale : null;
+        int valueWidth = hpText != null ? metrics.stringWidth(hpText) + 4 : 0;
+
         int labelWidth = 22;
         int barX = x + labelWidth;
-        int barWidth = width - labelWidth - 26;
+        int barWidth = Math.max(20, width - labelWidth - valueWidth);
 
         graphics.setColor(track);
         graphics.fillRect(barX, y, barWidth, barHeight);
@@ -439,14 +443,12 @@ public class PartyFrameOverlay extends Overlay {
         graphics.setColor(border);
         graphics.drawRect(barX, y, barWidth - 1, barHeight - 1);
 
-        FontMetrics metrics = graphics.getFontMetrics();
         graphics.setColor(TEXT);
         String name = truncateToWidth(metrics, member.targetName, Math.max(0, barWidth - 6));
         graphics.drawString(name, barX + 3, y + barHeight - 2);
 
         if (hasRatio) {
             graphics.setColor(labelColor);
-            String hpText = member.targetHealthRatio + "/" + member.targetHealthScale;
             graphics.drawString(hpText, barX + barWidth + 4, y + barHeight - 2);
         }
     }
