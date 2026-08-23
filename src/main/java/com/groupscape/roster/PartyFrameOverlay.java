@@ -402,11 +402,12 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     /**
-     * Renders the "target" row as an HP-style bar instead of plain text, styled to match the
-     * webapp's player-interacting component: red bar filled by HP ratio for an actual combat
-     * target (health scale &gt; 0), full gold bar with no HP text for a neutral interaction
-     * (banking, talking to an NPC). The HP text is reserved a fixed width inside the bar's right
-     * edge so the name can never grow into it - it truncates with an ellipsis instead.
+     * Renders the "target" row as an HP-style bar instead of plain text, laid out exactly like
+     * {@link #drawBar} (label outside to the left, value outside to the right) so it lines up
+     * with the HP/Pr/Run/Sp rows above it. Styled to match the webapp's player-interacting
+     * component: red bar filled by HP ratio for an actual combat target (health scale &gt; 0),
+     * full gold bar with no HP value for a neutral interaction (banking, talking to an NPC). The
+     * target's name renders inside the bar and truncates with an ellipsis instead of overflowing.
      */
     private void drawTargetBar(Graphics2D graphics, int x, int y, int width, RosterMember member) {
         boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
@@ -417,37 +418,36 @@ public class PartyFrameOverlay extends Overlay {
         Color border = isEnemy ? TARGET_COMBAT_BORDER : TARGET_NEUTRAL_BORDER;
         Color labelColor = isEnemy ? TARGET_COMBAT_LABEL : TARGET_NEUTRAL_LABEL;
 
-        graphics.setColor(track);
-        graphics.fillRect(x, y, width, barHeight);
+        graphics.setColor(labelColor);
+        graphics.drawString("Tgt", x, y + barHeight - 2);
 
-        int filledWidth = width;
+        int labelWidth = 22;
+        int barX = x + labelWidth;
+        int barWidth = width - labelWidth - 26;
+
+        graphics.setColor(track);
+        graphics.fillRect(barX, y, barWidth, barHeight);
+
+        int filledWidth = barWidth;
         if (hasRatio) {
             double ratio = Math.max(0, Math.min(1.0, member.targetHealthRatio / (double) member.targetHealthScale));
-            filledWidth = (int) (ratio * width);
+            filledWidth = (int) (ratio * barWidth);
         }
         graphics.setColor(fill);
-        graphics.fillRect(x, y, filledWidth, barHeight);
+        graphics.fillRect(barX, y, filledWidth, barHeight);
 
         graphics.setColor(border);
-        graphics.drawRect(x, y, width - 1, barHeight - 1);
-
-        String label = "Tgt";
-        graphics.setColor(labelColor);
-        graphics.drawString(label, x + 3, y + barHeight - 2);
+        graphics.drawRect(barX, y, barWidth - 1, barHeight - 1);
 
         FontMetrics metrics = graphics.getFontMetrics();
-        int nameX = x + metrics.stringWidth(label) + 8;
-
-        String hpText = hasRatio ? member.targetHealthRatio + "/" + member.targetHealthScale : null;
-        int hpReserve = hpText != null ? metrics.stringWidth(hpText) + 6 : 3;
-
-        int nameMaxWidth = Math.max(0, (x + width) - nameX - hpReserve);
         graphics.setColor(TEXT);
-        graphics.drawString(truncateToWidth(metrics, member.targetName, nameMaxWidth), nameX, y + barHeight - 2);
+        String name = truncateToWidth(metrics, member.targetName, Math.max(0, barWidth - 6));
+        graphics.drawString(name, barX + 3, y + barHeight - 2);
 
-        if (hpText != null) {
+        if (hasRatio) {
             graphics.setColor(labelColor);
-            graphics.drawString(hpText, x + width - metrics.stringWidth(hpText) - 3, y + barHeight - 2);
+            String hpText = member.targetHealthRatio + "/" + member.targetHealthScale;
+            graphics.drawString(hpText, barX + barWidth + 4, y + barHeight - 2);
         }
     }
 
