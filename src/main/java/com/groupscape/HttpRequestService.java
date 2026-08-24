@@ -15,7 +15,7 @@ public class HttpRequestService {
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static final String USER_AGENT =
             "GroupScapeTracker/" + PluginVersion.get() + " " + "RuneLite/" + RuneLiteProperties.getVersion();
-    private static final String PUBLIC_BASE_URL = "https://groupscape.mayzr.online";
+    private static final String PUBLIC_BASE_URL = "https://groupscape.online";
 
     @Inject
     private OkHttpClient okHttpClient;
