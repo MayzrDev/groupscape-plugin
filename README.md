@@ -5,6 +5,10 @@
 <h1 align="center">GroupScape Tracker Plugin</h1>
 
 <p align="center">
+  Setup and web dashboard: <a href="https://groupscape.online/">groupscape.online</a>
+</p>
+
+<p align="center">
   A RuneLite plugin for OSRS groups — clans, group ironmen, and friend groups.
 </p>
 
@@ -12,7 +16,11 @@
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-BSD--2--Clause-blue.svg" alt="BSD 2-Clause License"></a>
 </p>
 
-Source for the paired server/webapp: [groupscape-web](../groupscape-web)
+Ever wished RuneScape had the party system you know from other MMOs?
+
+Now it does. 🎮
+
+GroupScape — RuneScape, but better with friends.
 
 ## What it does
 
@@ -39,6 +47,10 @@ Requires a JDK 11+ toolchain.
 ./gradlew build
 ./gradlew run
 ```
+
+## Sources
+
+Source for the paired server/webapp: [groupscape-web](../groupscape-web)
 
 ## License
 
