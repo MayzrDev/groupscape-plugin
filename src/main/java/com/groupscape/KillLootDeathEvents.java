@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 
 /**
  * Kill/loot/death aren't per-tick snapshot data like the rest of {@link DataManager}'s
@@ -33,6 +34,7 @@ public class KillLootDeathEvents {
         final int worldY;
         final int plane;
         final int world;
+        final String occurredAt;
         List<Map<String, Object>> loot;
 
         PendingKill(int npcId, String npcName, int worldX, int worldY, int plane, int world) {
@@ -42,6 +44,7 @@ public class KillLootDeathEvents {
             this.worldY = worldY;
             this.plane = plane;
             this.world = world;
+            this.occurredAt = Instant.now().toString();
         }
 
         Map<String, Object> toMap() {
@@ -53,6 +56,7 @@ public class KillLootDeathEvents {
             event.put("worldY", worldY);
             event.put("plane", plane);
             event.put("world", world);
+            event.put("occurredAt", occurredAt);
             if (loot != null) {
                 event.put("loot", loot);
             }
@@ -90,6 +94,7 @@ public class KillLootDeathEvents {
         death.put("worldY", worldY);
         death.put("plane", plane);
         death.put("world", world);
+        death.put("occurredAt", Instant.now().toString());
         if (killerName != null) {
             death.put("killerName", killerName);
         }
