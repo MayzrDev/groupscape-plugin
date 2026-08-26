@@ -141,8 +141,10 @@ public class PartyFrameOverlay extends Overlay {
         for (RosterMember member : members) {
             boolean self = member.name.equalsIgnoreCase(localPlayer.getName());
             boolean offline = !self && isOffline(member);
+            boolean outOfVicinity = !self && !offline && config.partyOverlayFadeOutOfVicinity()
+                    && !withinVicinity(member, config.partyOverlayVicinityFadeTiles());
             int startY = y;
-            y = drawMember(graphics, member, y, offline);
+            y = drawMember(graphics, member, y, offline || outOfVicinity);
             lastRenderedRows.put(new Rectangle(0, startY, PANEL_WIDTH, y - startY), member);
         }
 
@@ -205,10 +207,38 @@ public class PartyFrameOverlay extends Overlay {
             if (config.partyOverlayHideOfflineMembers() && isOffline(member)) {
                 continue;
             }
+            if (config.partyOverlayHideOutOfVicinity()
+                    && !isOffline(member)
+                    && !withinVicinity(member, config.partyOverlayVicinityHideTiles())) {
+                continue;
+            }
             members.add(member);
         }
 
         return members;
+    }
+
+    /**
+     * True if {@code member}'s actor is loaded in the local client's scene and within
+     * {@code tiles} of the local player. The roster carries no synced world position, so distance
+     * can only be confirmed for members RuneLite has actually rendered nearby - an unloaded actor
+     * (different world, out of render distance) is treated as not within vicinity.
+     */
+    private boolean withinVicinity(RosterMember member, int tiles) {
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null) {
+            return false;
+        }
+        for (Player player : client.getPlayers()) {
+            if (player == null || player.getName() == null) {
+                continue;
+            }
+            if (!player.getName().equalsIgnoreCase(member.name)) {
+                continue;
+            }
+            return player.getWorldLocation().distanceTo(localPlayer.getWorldLocation()) <= tiles;
+        }
+        return false;
     }
 
     /** Reads the local player's own vitals straight from Client, avoiding any WebSocket round-trip. */
@@ -318,13 +348,13 @@ public class PartyFrameOverlay extends Overlay {
         return height + memberGap;
     }
 
-    private int drawMember(Graphics2D graphics, RosterMember member, int y, boolean offline) {
+    private int drawMember(Graphics2D graphics, RosterMember member, int y, boolean faded) {
         int startY = y;
         Color stripeColor = memberColor(member.color);
 
-        float alpha = offline ? OFFLINE_ALPHA : 1f;
+        float alpha = faded ? OFFLINE_ALPHA : 1f;
         java.awt.Composite originalComposite = graphics.getComposite();
-        if (offline) {
+        if (faded) {
             graphics.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, alpha));
         }
 
@@ -369,7 +399,7 @@ public class PartyFrameOverlay extends Overlay {
             y += barHeight + barGap;
         }
 
-        if (offline) {
+        if (faded) {
             graphics.setComposite(originalComposite);
         }
 

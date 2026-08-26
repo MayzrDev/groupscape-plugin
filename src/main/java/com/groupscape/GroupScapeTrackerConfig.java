@@ -102,11 +102,57 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "partyOverlayFadeOutOfVicinity",
+            name = "Fade members out of vicinity",
+            description = "Dim members whose tile can't be confirmed within the fade distance below (requires their actor to be loaded in your client)",
+            section = partyOverlaySection,
+            position = 4
+    )
+    default boolean partyOverlayFadeOutOfVicinity() {
+        return false;
+    }
+
+    @Range(min = 1)
+    @ConfigItem(
+            keyName = "partyOverlayVicinityFadeTiles",
+            name = "Vicinity fade distance (tiles)",
+            description = "Members farther than this many tiles away (or whose position can't be confirmed) are dimmed",
+            section = partyOverlaySection,
+            position = 5
+    )
+    default int partyOverlayVicinityFadeTiles() {
+        return 15;
+    }
+
+    @ConfigItem(
+            keyName = "partyOverlayHideOutOfVicinity",
+            name = "Hide members out of vicinity",
+            description = "Hide members entirely once they're farther than the hide distance below (requires their actor to be loaded in your client)",
+            section = partyOverlaySection,
+            position = 6
+    )
+    default boolean partyOverlayHideOutOfVicinity() {
+        return false;
+    }
+
+    @Range(min = 1)
+    @ConfigItem(
+            keyName = "partyOverlayVicinityHideTiles",
+            name = "Vicinity hide distance (tiles)",
+            description = "Members farther than this many tiles away (or whose position can't be confirmed) are hidden entirely",
+            section = partyOverlaySection,
+            position = 7
+    )
+    default int partyOverlayVicinityHideTiles() {
+        return 30;
+    }
+
+    @ConfigItem(
             keyName = "partyOverlayHideSelf",
             name = "Hide own row",
             description = "Don't show your own character in the party overlay",
             section = partyOverlaySection,
-            position = 4
+            position = 8
     )
     default boolean partyOverlayHideSelf() {
         return false;
@@ -117,7 +163,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide world",
             description = "Hide the world number next to each member's name",
             section = partyOverlaySection,
-            position = 5
+            position = 9
     )
     default boolean partyOverlayHideWorld() {
         return false;
@@ -128,7 +174,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide HP bar",
             description = "Hide the hitpoints bar",
             section = partyOverlaySection,
-            position = 6
+            position = 10
     )
     default boolean partyOverlayHideHp() {
         return false;
@@ -139,7 +185,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide prayer bar",
             description = "Hide the prayer bar and active prayer icons",
             section = partyOverlaySection,
-            position = 7
+            position = 11
     )
     default boolean partyOverlayHidePrayer() {
         return false;
@@ -150,7 +196,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide run energy bar",
             description = "Hide the run energy bar",
             section = partyOverlaySection,
-            position = 8
+            position = 12
     )
     default boolean partyOverlayHideRun() {
         return false;
@@ -161,7 +207,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide special attack bar",
             description = "Hide the special attack bar",
             section = partyOverlaySection,
-            position = 9
+            position = 13
     )
     default boolean partyOverlayHideSpec() {
         return false;
@@ -172,7 +218,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide target bar",
             description = "Hide the target HP bar (combat target, bank, or NPC being talked to)",
             section = partyOverlaySection,
-            position = 10
+            position = 14
     )
     default boolean partyOverlayHideTarget() {
         return false;
@@ -184,7 +230,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Overlay opacity",
             description = "Background opacity of the party overlay panel, from 0 (transparent) to 100 (solid)",
             section = partyOverlaySection,
-            position = 11
+            position = 15
     )
     default int partyOverlayOpacity() {
         return 85;
@@ -200,7 +246,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Scale",
             description = "Compact tightens row/bar spacing to fit more members in less space",
             section = partyOverlaySection,
-            position = 12
+            position = 16
     )
     default PartyOverlayScale partyOverlayScale() {
         return PartyOverlayScale.NORMAL;
@@ -212,7 +258,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Max members shown",
             description = "Truncate the overlay to this many members (0 = unlimited)",
             section = partyOverlaySection,
-            position = 13
+            position = 17
     )
     default int partyOverlayMaxMembers() {
         return 0;
