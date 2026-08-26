@@ -219,9 +219,51 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigSection(
+            name = "Tile highlight",
+            description = "Outline group members' tiles when they're visible in your game client",
+            position = 3
+    )
+    String tileHighlightSection = "TileHighlightSection";
+
+    @ConfigItem(
+            keyName = "tileHighlightEnabled",
+            name = "Enable tile highlight",
+            description = "Outline a group member's tile whenever they're rendered on your screen",
+            section = tileHighlightSection,
+            position = 0
+    )
+    default boolean tileHighlightEnabled() {
+        return true;
+    }
+
+    @Range(min = 1, max = 8)
+    @ConfigItem(
+            keyName = "tileHighlightStrokeWidth",
+            name = "Stroke width",
+            description = "Thickness of the tile outline",
+            section = tileHighlightSection,
+            position = 1
+    )
+    default int tileHighlightStrokeWidth() {
+        return 2;
+    }
+
+    @Range(min = 0, max = 100)
+    @ConfigItem(
+            keyName = "tileHighlightOpacity",
+            name = "Opacity",
+            description = "Outline opacity, from 0 (transparent) to 100 (solid)",
+            section = tileHighlightSection,
+            position = 2
+    )
+    default int tileHighlightOpacity() {
+        return 100;
+    }
+
+    @ConfigSection(
             name = "Sync",
             description = "Controls for sending your data to the server",
-            position = 3
+            position = 4
     )
     String syncSection = "SyncSection";
 
@@ -238,7 +280,7 @@ public interface GroupScapeTrackerConfig extends Config {
     @ConfigSection(
             name = "Notifications",
             description = "Chat notifications for group events",
-            position = 4
+            position = 5
     )
     String notificationsSection = "NotificationsSection";
 

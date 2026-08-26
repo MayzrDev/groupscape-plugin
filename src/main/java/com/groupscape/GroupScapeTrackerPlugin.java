@@ -7,6 +7,7 @@ import com.groupscape.roster.RosterClient;
 import com.groupscape.roster.RosterMember;
 import com.groupscape.roster.RosterNotifier;
 import com.groupscape.roster.RosterState;
+import com.groupscape.roster.TileHighlightOverlay;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
@@ -85,6 +86,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private RosterClient rosterClient;
     private RosterNotifier rosterNotifier;
     private PartyFrameOverlay partyFrameOverlay;
+    private TileHighlightOverlay tileHighlightOverlay;
     private int itemsDeposited = 0;
     private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
@@ -135,6 +137,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
+        tileHighlightOverlay = new TileHighlightOverlay(client, config, rosterState);
+        overlayManager.add(tileHighlightOverlay);
 
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
@@ -153,6 +157,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (partyFrameOverlay != null) {
             overlayManager.remove(partyFrameOverlay);
             partyFrameOverlay = null;
+        }
+        if (tileHighlightOverlay != null) {
+            overlayManager.remove(tileHighlightOverlay);
+            tileHighlightOverlay = null;
         }
         if (rosterClient != null) {
             rosterClient.shutdown();
