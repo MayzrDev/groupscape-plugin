@@ -63,6 +63,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private ItemManager itemManager;
     @Inject
+    private net.runelite.client.game.SpriteManager spriteManager;
+    @Inject
     private CollectionLogWidgetSubscriber collectionLogWidgetSubscriber;
     @Inject
     private PortraitCaptureManager portraitCaptureManager;
@@ -136,7 +138,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         rosterState = new RosterState();
         rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent, groupLinkListener);
         rosterNotifier = new RosterNotifier();
-        partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
+        partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
         overlayManager.add(partyFrameOverlay);
         tileHighlightOverlay = new TileHighlightOverlay(client, config, rosterState);
         overlayManager.add(tileHighlightOverlay);

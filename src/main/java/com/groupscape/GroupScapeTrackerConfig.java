@@ -109,7 +109,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 4
     )
     default boolean partyOverlayFadeOutOfVicinity() {
-        return false;
+        return true;
     }
 
     @Range(min = 1)
@@ -121,7 +121,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 5
     )
     default int partyOverlayVicinityFadeTiles() {
-        return 15;
+        return 50;
     }
 
     @ConfigItem(
@@ -132,7 +132,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 6
     )
     default boolean partyOverlayHideOutOfVicinity() {
-        return false;
+        return true;
     }
 
     @Range(min = 1)
@@ -144,7 +144,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 7
     )
     default int partyOverlayVicinityHideTiles() {
-        return 30;
+        return 100;
     }
 
     @ConfigItem(
@@ -192,11 +192,22 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigItem(
+            keyName = "partyOverlayHidePrayerIcons",
+            name = "Hide active prayer icons",
+            description = "Hide the active-prayer icon row, keeping the prayer bar itself visible",
+            section = partyOverlaySection,
+            position = 12
+    )
+    default boolean partyOverlayHidePrayerIcons() {
+        return false;
+    }
+
+    @ConfigItem(
             keyName = "partyOverlayHideRun",
             name = "Hide run energy bar",
             description = "Hide the run energy bar",
             section = partyOverlaySection,
-            position = 12
+            position = 13
     )
     default boolean partyOverlayHideRun() {
         return false;
@@ -207,7 +218,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide special attack bar",
             description = "Hide the special attack bar",
             section = partyOverlaySection,
-            position = 13
+            position = 14
     )
     default boolean partyOverlayHideSpec() {
         return false;
@@ -218,7 +229,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Hide target bar",
             description = "Hide the target HP bar (combat target, bank, or NPC being talked to)",
             section = partyOverlaySection,
-            position = 14
+            position = 15
     )
     default boolean partyOverlayHideTarget() {
         return false;
@@ -230,7 +241,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Overlay opacity",
             description = "Background opacity of the party overlay panel, from 0 (transparent) to 100 (solid)",
             section = partyOverlaySection,
-            position = 15
+            position = 16
     )
     default int partyOverlayOpacity() {
         return 85;
@@ -246,7 +257,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Scale",
             description = "Compact tightens row/bar spacing to fit more members in less space",
             section = partyOverlaySection,
-            position = 16
+            position = 17
     )
     default PartyOverlayScale partyOverlayScale() {
         return PartyOverlayScale.NORMAL;
@@ -258,10 +269,10 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "Max members shown",
             description = "Truncate the overlay to this many members (0 = unlimited)",
             section = partyOverlaySection,
-            position = 17
+            position = 18
     )
     default int partyOverlayMaxMembers() {
-        return 0;
+        return 5;
     }
 
     @ConfigSection(
@@ -383,12 +394,12 @@ public interface GroupScapeTrackerConfig extends Config {
 
     @ConfigItem(
             keyName = "notifyNotableDrop",
-            name = "Notable drop",
+            name = "Notable drop chat message",
             description = "Send a chat message when a group member gets a drop worth more than the threshold below",
             section = notificationsSection
     )
     default boolean notifyNotableDrop() {
-        return false;
+        return true;
     }
 
     @Range(min = 0)
