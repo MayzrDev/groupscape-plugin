@@ -14,7 +14,6 @@ import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.gameval.VarClientID;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.WorldView;
@@ -377,17 +376,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     /**
-     * Adds a "Fill join prompt" / "Copy name" entry when right-clicking a group member's name in
-     * {@link PartyFrameOverlay}, so the player can quick-join a friend's house/boss party without
-     * typing their name. "Fill join prompt" writes straight into the native chatbox name-entry
-     * var when one is open (see {@link #isAwaitingChatNameInput()}); otherwise it falls back to
-     * copying the name to the clipboard so the click is never wasted.
-     *
-     * TODO(verify against a live client via RuneLite's Widget Inspector before relying on this):
-     * {@link #isAwaitingChatNameInput()} and {@link #handleQuickJoin} assume the house/boss-party
-     * "enter a friend's name" prompts are ordinary chatbox line input (VarClientInt.INPUT_TYPE /
-     * VarClientStr.CHATBOX_TYPED_TEXT), the same mechanism used for public chat. That assumption
-     * hasn't been confirmed against the live game and may need adjusting per-dialog.
+     * Adds a "Copy name" entry when right-clicking a group member's name in
+     * {@link PartyFrameOverlay}, copying the name to the clipboard.
      */
     @Subscribe
     public void onMenuOpened(MenuOpened event) {
@@ -397,46 +387,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
         RosterMember member = partyFrameOverlay.memberAt(mouse.getX(), mouse.getY());
         if (member == null) return;
 
-        boolean promptOpen = isAwaitingChatNameInput();
-        String option = promptOpen ? "Fill join prompt" : "Copy name";
-
         client.createMenuEntry(-1)
-                .setOption(option)
+                .setOption("Copy name")
                 .setTarget(ColorUtil.wrapWithColorTag(member.name, Color.YELLOW))
                 .setType(MenuAction.RUNELITE)
-                .onClick(e -> handleQuickJoin(member.name, promptOpen));
+                .onClick(e -> handleCopyName(member.name));
     }
 
-    /**
-     * 8 is not one of RuneLite's named {@code InputType} constants (PRIVATE_MESSAGE=6, SEARCH=11)
-     * but was confirmed live via the Developer Tools Var Inspector: MESLAYERMODE goes 0 -> 8 the
-     * instant either the house-join or the boss-party-join "Enter a friend's name" prompt opens.
-     */
-    private static final int INPUT_TYPE_NAME_ENTRY = 8;
-
-    private boolean isAwaitingChatNameInput() {
-        return client.getVarcIntValue(VarClientID.MESLAYERMODE) == INPUT_TYPE_NAME_ENTRY;
-    }
-
-    /**
-     * Mirrors RuneLite core's own {@code ChatKeyboardListener.applyText}: any non-plain-chat input
-     * mode (private message, and by the same logic this name-entry mode) is backed by
-     * {@code MESLAYERINPUT}, not {@code CHATINPUT} - writing to the wrong var was why the first
-     * attempt at this silently did nothing. The chat line also isn't redrawn just because the var
-     * changed; {@code CHAT_TEXT_INPUT_REBUILD} has to be run explicitly afterward, same as core
-     * does for its private-message-mode branch.
-     */
-    private void handleQuickJoin(String name, boolean promptOpen) {
-        if (promptOpen) {
-            clientThread.invoke(() -> {
-                client.setVarcStrValue(VarClientID.MESLAYERINPUT, name);
-                client.runScript(ScriptID.CHAT_TEXT_INPUT_REBUILD, "");
-            });
-            sendChatMessage("Filled join prompt with \"" + name + "\".");
-        } else {
-            Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(name), null);
-            sendChatMessage("Copied \"" + name + "\" to clipboard.");
-        }
+    private void handleCopyName(String name) {
+        Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(name), null);
+        sendChatMessage("Copied \"" + name + "\" to clipboard.");
     }
 
     private static boolean isGameObjectAction(MenuAction menuAction) {
