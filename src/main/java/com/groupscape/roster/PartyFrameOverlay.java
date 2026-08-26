@@ -458,9 +458,7 @@ public class PartyFrameOverlay extends Overlay {
         }
         if (!config.partyOverlayHideRun()) height += barHeight + barGap;
         if (!config.partyOverlayHideSpec()) height += barHeight + barGap;
-        if (!config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
-            height += barHeight + barGap;
-        }
+        if (!config.partyOverlayHideTarget()) height += barHeight + barGap;
         return height + memberGap;
     }
 
@@ -513,7 +511,7 @@ public class PartyFrameOverlay extends Overlay {
             y += barHeight + barGap;
         }
 
-        if (!config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
+        if (!config.partyOverlayHideTarget()) {
             drawTargetBar(graphics, textX, y, barWidth, member);
             y += barHeight + barGap;
         }
@@ -557,8 +555,16 @@ public class PartyFrameOverlay extends Overlay {
      * component: red bar filled by HP ratio for an actual combat target (health scale &gt; 0),
      * full gold bar with no HP value for a neutral interaction (banking, talking to an NPC). The
      * target's name renders inside the bar and truncates with an ellipsis instead of overflowing.
+     * Row is always drawn — reserving its height even with no target — so the panel doesn't
+     * grow/shrink as members enter and leave combat; with no target it falls back to the same
+     * muted-track/"--" look {@link #drawBar} uses for missing values, rather than going blank.
      */
     private void drawTargetBar(Graphics2D graphics, int x, int y, int width, RosterMember member) {
+        if (member.targetName == null || member.targetName.isEmpty()) {
+            drawBar(graphics, x, y, width, "Tgt", null, null, null);
+            return;
+        }
+
         boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
         boolean hasRatio = isEnemy && member.targetHealthRatio != null && member.targetHealthRatio >= 0;
 
