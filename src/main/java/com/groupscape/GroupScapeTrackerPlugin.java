@@ -44,6 +44,7 @@ import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -133,7 +134,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.setGroupLinkListener(groupLinkListener);
 
         rosterState = new RosterState();
-        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, groupLinkListener);
+        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent, groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
@@ -541,23 +542,82 @@ public class GroupScapeTrackerPlugin extends Plugin {
     /**
      * {@code LootReceived} is RuneLite's own client-side wrapper around the authoritative
      * in-game loot-tracker script signal, preferred over a same-tick/same-tile ItemSpawned
-     * correlation. Correlated to a pending kill best-effort by
-     * {@link KillLootDeathEvents#onLoot}; chest/pickpocket/clue-scroll loot sources bypass
-     * NPC-loot events entirely and are out of scope here.
+     * correlation. NPC loot is also correlated to a pending kill best-effort by
+     * {@link KillLootDeathEvents#onLoot}; chest/pickpocket/PvP/clue-scroll loot sources bypass
+     * that correlation entirely (there's no kill to attach to) but are still eligible for the
+     * notable-drop check below.
      */
     @Subscribe
     public void onLootReceived(LootReceived event) {
-        if (event.getType() != LootRecordType.NPC) return;
-
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (ItemStack item : event.getItems()) {
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("itemId", item.getId());
-            entry.put("quantity", item.getQuantity());
-            items.add(entry);
+        if (event.getType() == LootRecordType.NPC) {
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (ItemStack item : event.getItems()) {
+                Map<String, Object> entry = new HashMap<>();
+                entry.put("itemId", item.getId());
+                entry.put("quantity", item.getQuantity());
+                items.add(entry);
+            }
+            dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         }
 
-        dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
+        checkNotableDrop(event.getType(), event.getName(), event.getItems());
+    }
+
+    /**
+     * Flags any loot batch whose total GE value crosses
+     * {@link GroupScapeTrackerConfig#notableDropThreshold()} for a group chat broadcast,
+     * regardless of {@link LootRecordType} - unlike {@link KillLootDeathEvents#onLoot}, this
+     * isn't limited to NPC kills. Sending is unconditional once the threshold is crossed
+     * (matches {@link #onGroupKillEvent}'s "your own kills always get broadcast" behavior);
+     * {@link GroupScapeTrackerConfig#notifyNotableDrop()} only gates whether incoming broadcasts
+     * get displayed, in {@link #onGroupDropEvent}.
+     */
+    private void checkNotableDrop(LootRecordType type, String sourceName, Collection<ItemStack> items) {
+        Player local = client.getLocalPlayer();
+        if (local == null || local.getName() == null) return;
+
+        long totalValue = 0;
+        ItemStack highlight = null;
+        long highlightValue = -1;
+        for (ItemStack item : items) {
+            long value = (long) itemManager.getItemPrice(item.getId()) * item.getQuantity();
+            totalValue += value;
+            if (value > highlightValue) {
+                highlightValue = value;
+                highlight = item;
+            }
+        }
+        if (highlight == null || totalValue < config.notableDropThreshold()) return;
+
+        String itemName = itemManager.getItemComposition(highlight.getId()).getName();
+        dataManager.getNotableDropEvents().onNotableDrop(
+                local.getName(), notableDropSourceType(type), sourceName, itemName, highlightValue, totalValue);
+    }
+
+    private static String notableDropSourceType(LootRecordType type) {
+        switch (type) {
+            case NPC:
+                return "kill";
+            case PLAYER:
+                return "pvp";
+            case EVENT:
+                return "chest";
+            case PICKPOCKET:
+                return "pickpocket";
+            default:
+                return "unknown";
+        }
+    }
+
+    /**
+     * Called by {@link RosterClient} when a group member's notable drop arrives over the party
+     * overlay WebSocket - unlike {@link #onGroupKillEvent}, this also fires for the dropper's
+     * own drop (nothing else tells them their own drop was notable), so there's no "skip if it's
+     * me" guard here. {@code message} is already fully formatted server-side.
+     */
+    private void onGroupDropEvent(String memberName, String message) {
+        if (!config.notifyNotableDrop()) return;
+        sendChatMessage(message);
     }
 
     /**

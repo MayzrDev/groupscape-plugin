@@ -81,6 +81,8 @@ public class DataManager {
     private final NpcDialogueTracker npcDialogueTracker = new NpcDialogueTracker();
     @Getter
     private final AlertEvents alertEvents = new AlertEvents();
+    @Getter
+    private final NotableDropEvents notableDropEvents = new NotableDropEvents();
 
     public void submitToApi() {
         if (config.pauseSync()) return;
@@ -120,6 +122,7 @@ public class DataManager {
             objectInteractionEvents.consumeState(updates);
             interactionEvents.consumeState(updates);
             alertEvents.consumeState(updates);
+            notableDropEvents.consumeState(updates);
 
             if (updates.size() > 1) {
                 HttpRequestService.HttpResponse response = httpRequestService.post(url, apiKey, updates);
@@ -217,6 +220,7 @@ public class DataManager {
         objectInteractionEvents.restoreState();
         interactionEvents.restoreState();
         alertEvents.restoreState();
+        notableDropEvents.restoreState();
     }
 
     private String baseUrl() {

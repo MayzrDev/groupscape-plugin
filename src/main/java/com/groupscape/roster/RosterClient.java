@@ -25,6 +25,7 @@ public class RosterClient {
     private static final String ROSTER_SNAPSHOT = "roster_snapshot";
     private static final String VITALS_UPDATE = "vitals_update";
     private static final String KILL_EVENT = "kill_event";
+    private static final String DROP_EVENT = "drop_event";
     private static final String COLOR_UPDATE = "color_update";
 
     /** Notified when another group member's kill arrives over the websocket. */
@@ -32,10 +33,16 @@ public class RosterClient {
         void onKillEvent(String memberName, String npcName);
     }
 
+    /** Notified when a group member's notable drop arrives over the websocket. */
+    public interface DropEventListener {
+        void onDropEvent(String memberName, String message);
+    }
+
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
     private final KillEventListener killEventListener;
+    private final DropEventListener dropEventListener;
     private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -51,11 +58,12 @@ public class RosterClient {
     private String connectedApiKey;
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
-                         GroupLinkListener groupLinkListener) {
+                         DropEventListener dropEventListener, GroupLinkListener groupLinkListener) {
         this.okHttpClient = okHttpClient;
         this.gson = gson;
         this.rosterState = rosterState;
         this.killEventListener = killEventListener;
+        this.dropEventListener = dropEventListener;
         this.groupLinkListener = groupLinkListener;
     }
 
@@ -160,6 +168,12 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.KillEventPayload.class);
                 if (payload.memberName != null && payload.npcName != null) {
                     killEventListener.onKillEvent(payload.memberName, payload.npcName);
+                }
+            } else if (DROP_EVENT.equals(envelope.type)) {
+                RosterWireTypes.DropEventPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.DropEventPayload.class);
+                if (payload.memberName != null && payload.message != null) {
+                    dropEventListener.onDropEvent(payload.memberName, payload.message);
                 }
             } else if (COLOR_UPDATE.equals(envelope.type)) {
                 RosterWireTypes.ColorUpdatePayload payload =

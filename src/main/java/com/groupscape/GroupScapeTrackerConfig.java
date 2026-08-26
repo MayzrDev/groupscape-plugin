@@ -334,4 +334,25 @@ public interface GroupScapeTrackerConfig extends Config {
     default boolean notifyBossKill() {
         return false;
     }
+
+    @ConfigItem(
+            keyName = "notifyNotableDrop",
+            name = "Notable drop",
+            description = "Send a chat message when a group member gets a drop worth more than the threshold below",
+            section = notificationsSection
+    )
+    default boolean notifyNotableDrop() {
+        return false;
+    }
+
+    @Range(min = 0)
+    @ConfigItem(
+            keyName = "notableDropThreshold",
+            name = "Notable drop value threshold",
+            description = "Total GE value a drop must reach to trigger the notable drop notification",
+            section = notificationsSection
+    )
+    default int notableDropThreshold() {
+        return 50000;
+    }
 }

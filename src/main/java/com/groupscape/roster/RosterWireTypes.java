@@ -35,6 +35,11 @@ public class RosterWireTypes {
         public String npcName;
     }
 
+    public static class DropEventPayload {
+        public String memberName;
+        public String message;
+    }
+
     public static class ColorUpdatePayload {
         public String name;
         public String color;
