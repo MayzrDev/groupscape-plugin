@@ -33,13 +33,19 @@ public class RosterMember {
     public void applyVitals(RosterWireTypes.WireVitals vitals) {
         if (vitals == null) return;
 
-        this.hp = vitals.hp;
-        this.maxHp = vitals.maxHp;
-        this.prayer = vitals.prayer;
-        this.maxPrayer = vitals.maxPrayer;
-        this.runEnergy = vitals.runEnergy;
+        // The server sends hp/maxHp/prayer/maxPrayer/runEnergy/world as one all-or-nothing bundle,
+        // going all-null for a single missed heartbeat tick. Only overwrite them together when the
+        // bundle actually has data, so one missed heartbeat doesn't blank the overlay instantly -
+        // stale values persist until isOffline() trips past OFFLINE_THRESHOLD_MS.
+        if (vitals.hp != null || vitals.maxHp != null) {
+            this.hp = vitals.hp;
+            this.maxHp = vitals.maxHp;
+            this.prayer = vitals.prayer;
+            this.maxPrayer = vitals.maxPrayer;
+            this.runEnergy = vitals.runEnergy;
+            this.world = vitals.world;
+        }
         this.specEnergy = vitals.specEnergy;
-        this.world = vitals.world;
         this.targetName = vitals.targetName;
         this.targetHealthRatio = vitals.targetHealthRatio;
         this.targetHealthScale = vitals.targetHealthScale;
