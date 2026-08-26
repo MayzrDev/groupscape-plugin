@@ -62,6 +62,27 @@ public class PartyFrameOverlay extends Overlay {
     private static final int COMPACT_PRAYER_ICON_SIZE = 13;
     private static final int COMPACT_PRAYER_ICON_ROW_HEIGHT = COMPACT_PRAYER_ICON_SIZE + 1;
 
+    private static final int SUPER_COMPACT_PADDING = 3;
+    private static final int SUPER_COMPACT_MEMBER_GAP = 2;
+    private static final int SUPER_COMPACT_LINE_HEIGHT = 9;
+    private static final int SUPER_COMPACT_BAR_HEIGHT = 7;
+    private static final int SUPER_COMPACT_BAR_GAP = 1;
+    private static final int SUPER_COMPACT_PRAYER_ICON_SIZE = 11;
+    private static final int SUPER_COMPACT_PRAYER_ICON_ROW_HEIGHT = SUPER_COMPACT_PRAYER_ICON_SIZE + 1;
+
+    // Minimal fuses HP/Prayer/Run/Spec into one segmented strip (see drawMinimalCluster) instead
+    // of scaling down four separate labeled bars, so its member height drops far more than a
+    // straight-line continuation of the Normal/Compact/Super Compact spacing progression would.
+    private static final int MINIMAL_PADDING = 2;
+    private static final int MINIMAL_MEMBER_GAP = 2;
+    private static final int MINIMAL_LINE_HEIGHT = 9;
+    private static final int MINIMAL_BAR_HEIGHT = 7;
+    private static final int MINIMAL_BAR_GAP = 1;
+    private static final int MINIMAL_PRAYER_ICON_SIZE = 10;
+    private static final int MINIMAL_PRAYER_ICON_ROW_HEIGHT = MINIMAL_PRAYER_ICON_SIZE + 1;
+    private static final int MINIMAL_TARGET_STRIP_HEIGHT = 4;
+    private static final int MINIMAL_CLUSTER_SEGMENT_GAP = 2;
+
     private static final int PRAYER_ICON_GAP = 2;
 
     private int padding = NORMAL_PADDING;
@@ -71,6 +92,7 @@ public class PartyFrameOverlay extends Overlay {
     private int barGap = NORMAL_BAR_GAP;
     private int prayerIconSize = NORMAL_PRAYER_ICON_SIZE;
     private int prayerIconRowHeight = NORMAL_PRAYER_ICON_ROW_HEIGHT;
+    private int targetStripHeight = NORMAL_BAR_HEIGHT;
 
     private static final Color BG_BASE = new Color(40, 34, 24);
     private static final Color BORDER = new Color(88, 70, 44);
@@ -294,14 +316,53 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     private void applyScale() {
-        boolean compact = config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.COMPACT;
-        padding = compact ? COMPACT_PADDING : NORMAL_PADDING;
-        memberGap = compact ? COMPACT_MEMBER_GAP : NORMAL_MEMBER_GAP;
-        lineHeight = compact ? COMPACT_LINE_HEIGHT : NORMAL_LINE_HEIGHT;
-        barHeight = compact ? COMPACT_BAR_HEIGHT : NORMAL_BAR_HEIGHT;
-        barGap = compact ? COMPACT_BAR_GAP : NORMAL_BAR_GAP;
-        prayerIconSize = compact ? COMPACT_PRAYER_ICON_SIZE : NORMAL_PRAYER_ICON_SIZE;
-        prayerIconRowHeight = compact ? COMPACT_PRAYER_ICON_ROW_HEIGHT : NORMAL_PRAYER_ICON_ROW_HEIGHT;
+        switch (config.partyOverlayScale()) {
+            case MINIMAL:
+                padding = MINIMAL_PADDING;
+                memberGap = MINIMAL_MEMBER_GAP;
+                lineHeight = MINIMAL_LINE_HEIGHT;
+                barHeight = MINIMAL_BAR_HEIGHT;
+                barGap = MINIMAL_BAR_GAP;
+                prayerIconSize = MINIMAL_PRAYER_ICON_SIZE;
+                prayerIconRowHeight = MINIMAL_PRAYER_ICON_ROW_HEIGHT;
+                targetStripHeight = MINIMAL_TARGET_STRIP_HEIGHT;
+                break;
+            case SUPER_COMPACT:
+                padding = SUPER_COMPACT_PADDING;
+                memberGap = SUPER_COMPACT_MEMBER_GAP;
+                lineHeight = SUPER_COMPACT_LINE_HEIGHT;
+                barHeight = SUPER_COMPACT_BAR_HEIGHT;
+                barGap = SUPER_COMPACT_BAR_GAP;
+                prayerIconSize = SUPER_COMPACT_PRAYER_ICON_SIZE;
+                prayerIconRowHeight = SUPER_COMPACT_PRAYER_ICON_ROW_HEIGHT;
+                targetStripHeight = barHeight;
+                break;
+            case COMPACT:
+                padding = COMPACT_PADDING;
+                memberGap = COMPACT_MEMBER_GAP;
+                lineHeight = COMPACT_LINE_HEIGHT;
+                barHeight = COMPACT_BAR_HEIGHT;
+                barGap = COMPACT_BAR_GAP;
+                prayerIconSize = COMPACT_PRAYER_ICON_SIZE;
+                prayerIconRowHeight = COMPACT_PRAYER_ICON_ROW_HEIGHT;
+                targetStripHeight = barHeight;
+                break;
+            case NORMAL:
+            default:
+                padding = NORMAL_PADDING;
+                memberGap = NORMAL_MEMBER_GAP;
+                lineHeight = NORMAL_LINE_HEIGHT;
+                barHeight = NORMAL_BAR_HEIGHT;
+                barGap = NORMAL_BAR_GAP;
+                prayerIconSize = NORMAL_PRAYER_ICON_SIZE;
+                prayerIconRowHeight = NORMAL_PRAYER_ICON_ROW_HEIGHT;
+                targetStripHeight = barHeight;
+                break;
+        }
+    }
+
+    private boolean isMinimal() {
+        return config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.MINIMAL;
     }
 
     private Color bgColor() {
@@ -449,6 +510,17 @@ public class PartyFrameOverlay extends Overlay {
 
     private int memberHeight(RosterMember member) {
         int height = lineHeight; // name row
+
+        if (isMinimal()) {
+            if (hasVisibleClusterBar()) height += barHeight + barGap;
+            if (!config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()
+                    && !visibleActivePrayers(member).isEmpty()) {
+                height += prayerIconRowHeight;
+            }
+            if (!config.partyOverlayHideTarget()) height += targetStripHeight + barGap;
+            return height + memberGap;
+        }
+
         if (!config.partyOverlayHideHp()) height += barHeight + barGap;
         if (!config.partyOverlayHidePrayer()) {
             height += barHeight + barGap;
@@ -460,6 +532,12 @@ public class PartyFrameOverlay extends Overlay {
         if (!config.partyOverlayHideSpec()) height += barHeight + barGap;
         if (!config.partyOverlayHideTarget()) height += barHeight + barGap;
         return height + memberGap;
+    }
+
+    /** True if at least one of HP/Prayer/Run/Spec is visible, i.e. the minimal cluster row has something to draw. */
+    private boolean hasVisibleClusterBar() {
+        return !config.partyOverlayHideHp() || !config.partyOverlayHidePrayer()
+                || !config.partyOverlayHideRun() || !config.partyOverlayHideSpec();
     }
 
     private int drawMember(Graphics2D graphics, RosterMember member, int y, boolean faded) {
@@ -482,6 +560,32 @@ public class PartyFrameOverlay extends Overlay {
         String nameLine = member.name + (!config.partyOverlayHideWorld() && member.world != null ? "  W" + member.world : "");
         graphics.drawString(nameLine, textX, y + 10);
         y += lineHeight;
+
+        if (isMinimal()) {
+            if (hasVisibleClusterBar()) {
+                drawMinimalCluster(graphics, textX, y, barWidth, member);
+                y += barHeight + barGap;
+            }
+
+            if (!config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()) {
+                List<String> activePrayers = visibleActivePrayers(member);
+                if (!activePrayers.isEmpty()) {
+                    drawPrayerIcons(graphics, textX, y, activePrayers);
+                    y += prayerIconRowHeight;
+                }
+            }
+
+            if (!config.partyOverlayHideTarget()) {
+                drawMinimalTargetStrip(graphics, textX, y, barWidth, member);
+                y += targetStripHeight + barGap;
+            }
+
+            if (faded) {
+                graphics.setComposite(originalComposite);
+            }
+
+            return startY + memberHeight(member);
+        }
 
         if (!config.partyOverlayHideHp()) {
             drawBar(graphics, textX, y, barWidth, "HP", member.hp, member.maxHp, HP_COLOR);
@@ -605,6 +709,93 @@ public class PartyFrameOverlay extends Overlay {
             graphics.setColor(labelColor);
             graphics.drawString(hpText, barX + barWidth + 4, y + barHeight - 2);
         }
+    }
+
+    /**
+     * Minimal tier only: fuses whichever of HP/Prayer/Run/Spec aren't hidden into one row of
+     * equal-width segments (color + fill, no label/number) instead of stacking them as separate
+     * labeled bars. Hiding a bar via its own config toggle removes its segment and lets the
+     * remaining ones grow to fill the freed width, rather than leaving a gap.
+     */
+    private void drawMinimalCluster(Graphics2D graphics, int x, int y, int width, RosterMember member) {
+        List<Color> colors = new ArrayList<>(4);
+        List<Double> ratios = new ArrayList<>(4);
+        if (!config.partyOverlayHideHp()) {
+            colors.add(HP_COLOR);
+            ratios.add(ratio(member.hp, member.maxHp));
+        }
+        if (!config.partyOverlayHidePrayer()) {
+            colors.add(PRAYER_COLOR);
+            ratios.add(ratio(member.prayer, member.maxPrayer));
+        }
+        if (!config.partyOverlayHideRun()) {
+            colors.add(RUN_COLOR);
+            ratios.add(ratio(member.runEnergy, 100));
+        }
+        if (!config.partyOverlayHideSpec()) {
+            colors.add(SPEC_COLOR);
+            ratios.add(ratio(member.specEnergy, 100));
+        }
+        if (colors.isEmpty()) {
+            return;
+        }
+
+        int segmentCount = colors.size();
+        int gapTotal = MINIMAL_CLUSTER_SEGMENT_GAP * (segmentCount - 1);
+        int segmentWidth = (width - gapTotal) / segmentCount;
+
+        int segX = x;
+        for (int i = 0; i < segmentCount; i++) {
+            int w = (i == segmentCount - 1) ? (width - (segX - x)) : segmentWidth;
+
+            graphics.setColor(TRACK_COLOR);
+            graphics.fillRect(segX, y, w, barHeight);
+
+            double r = ratios.get(i);
+            if (r > 0) {
+                graphics.setColor(colors.get(i));
+                graphics.fillRect(segX, y, (int) Math.round(w * r), barHeight);
+            }
+
+            segX += w + MINIMAL_CLUSTER_SEGMENT_GAP;
+        }
+    }
+
+    /**
+     * Minimal tier only: renders the target row as a thin, label-free strip instead of
+     * {@link #drawTargetBar}'s full bar-with-name-and-percentage, matching the cluster row's
+     * color-and-fill-only style. Always drawn (muted/empty when there's no target) so the panel
+     * doesn't resize as members enter and leave combat, mirroring drawTargetBar's convention.
+     */
+    private void drawMinimalTargetStrip(Graphics2D graphics, int x, int y, int width, RosterMember member) {
+        Color track = TRACK_COLOR;
+        Color fill = null;
+        double ratio = 1.0;
+
+        if (member.targetName != null && !member.targetName.isEmpty()) {
+            boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
+            boolean hasRatio = isEnemy && member.targetHealthRatio != null && member.targetHealthRatio >= 0;
+            track = isEnemy ? TARGET_COMBAT_TRACK : TARGET_NEUTRAL_TRACK;
+            fill = isEnemy ? TARGET_COMBAT_FILL : TARGET_NEUTRAL_FILL;
+            if (hasRatio) {
+                ratio = targetHealthRatio(member);
+            }
+        }
+
+        graphics.setColor(track);
+        graphics.fillRect(x, y, width, targetStripHeight);
+        if (fill != null) {
+            graphics.setColor(fill);
+            graphics.fillRect(x, y, (int) Math.round(width * ratio), targetStripHeight);
+        }
+    }
+
+    /** Clamped 0-1 ratio for a value/max pair, treating a missing value or non-positive max as empty. */
+    private static double ratio(Integer value, Integer max) {
+        if (value == null || max == null || max <= 0) {
+            return 0;
+        }
+        return Math.max(0, Math.min(1.0, value / (double) max));
     }
 
     /** Clamped current/scale ratio for a target with a known health scale, mirroring the webapp's player-interacting component. */

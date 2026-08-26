@@ -249,13 +249,15 @@ public interface GroupScapeTrackerConfig extends Config {
 
     enum PartyOverlayScale {
         NORMAL,
-        COMPACT
+        COMPACT,
+        SUPER_COMPACT,
+        MINIMAL
     }
 
     @ConfigItem(
             keyName = "partyOverlayScale",
             name = "Scale",
-            description = "Compact tightens row/bar spacing to fit more members in less space",
+            description = "Compact/Super compact tighten row/bar spacing; Minimal fuses HP/Prayer/Run/Spec into one bar strip",
             section = partyOverlaySection,
             position = 17
     )
