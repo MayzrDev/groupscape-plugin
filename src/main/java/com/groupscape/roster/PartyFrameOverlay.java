@@ -101,13 +101,19 @@ public class PartyFrameOverlay extends Overlay {
     );
     private static final Color OVERHEAD_TINT = new Color(232, 197, 71, 130);
 
-    // Activating one of these "upgraded" curses also flags its base tri-prayer as active in the
-    // client's prayer state, so without this the row would show both e.g. Rigour and Deadeye at
-    // once even though only Deadeye is actually selected in-game.
+    // Activating one of these "upgraded" curses also flags its lower-tier prayers as active in
+    // the client's prayer state (Deadeye lights up both Rigour and Eagle Eye too), so without
+    // this the row would show all of them at once even though only Deadeye is actually selected.
     private static final Map<Prayer, Prayer> BASE_PRAYER_SUPPRESSED_BY_UPGRADE = new EnumMap<>(Prayer.class);
     static {
         BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.RIGOUR, Prayer.DEADEYE);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.EAGLE_EYE, Prayer.DEADEYE);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.HAWK_EYE, Prayer.DEADEYE);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.SHARP_EYE, Prayer.DEADEYE);
         BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.AUGURY, Prayer.MYSTIC_VIGOUR);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_MIGHT, Prayer.MYSTIC_VIGOUR);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_LORE, Prayer.MYSTIC_VIGOUR);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_WILL, Prayer.MYSTIC_VIGOUR);
     }
 
     private static final Map<Prayer, Integer> PRAYER_SPRITE_IDS = buildPrayerSpriteIds();
