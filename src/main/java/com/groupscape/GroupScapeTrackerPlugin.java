@@ -97,6 +97,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private boolean lowHpAlertArmed = true;
     private boolean linkRequiredWarningShown = false;
     private boolean wasInWilderness = false;
+    /**
+     * NPC index -> last-known name, refreshed on every sighting. {@code npc.getName()} can
+     * return {@code null} by the time {@link NpcDespawned} fires (composition data already
+     * cleared), which previously made {@link #onNpcDespawned} silently drop otherwise-trackable
+     * boss kills (e.g. Vorkath) with {@link BossKillNpcNames#isTrackedBoss} always seeing
+     * {@code null}. Trimmed on despawn so this doesn't grow unbounded.
+     */
+    private final Map<Integer, String> npcNamesByIndex = new HashMap<>();
     private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
     private static final double LOW_HP_REARM_THRESHOLD = 0.5;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
@@ -527,11 +535,32 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * it, ported from groupscape-old.
      */
     @Subscribe
+    public void onNpcSpawned(NpcSpawned event) {
+        cacheNpcName(event.getNpc());
+    }
+
+    @Subscribe
+    public void onNpcChanged(NpcChanged event) {
+        cacheNpcName(event.getNpc());
+    }
+
+    private void cacheNpcName(NPC npc) {
+        String name = npc.getName();
+        if (name != null) {
+            npcNamesByIndex.put(npc.getIndex(), name);
+        }
+    }
+
+    @Subscribe
     public void onNpcDespawned(NpcDespawned event) {
         if (doNotUseThisData()) return;
 
         NPC npc = event.getNpc();
         String name = npc.getName();
+        if (name == null) {
+            name = npcNamesByIndex.get(npc.getIndex());
+        }
+        npcNamesByIndex.remove(npc.getIndex());
         if (!BossKillNpcNames.isTrackedBoss(name) || npc.getHealthRatio() != 0) return;
 
         WorldPoint wp = npc.getWorldLocation();
