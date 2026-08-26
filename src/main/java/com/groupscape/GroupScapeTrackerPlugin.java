@@ -574,9 +574,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@code LootReceived} is RuneLite's own client-side wrapper around the authoritative
      * in-game loot-tracker script signal, preferred over a same-tick/same-tile ItemSpawned
      * correlation. NPC loot is also correlated to a pending kill best-effort by
-     * {@link KillLootDeathEvents#onLoot}; chest/pickpocket/PvP/clue-scroll loot sources bypass
-     * that correlation entirely (there's no kill to attach to) but are still eligible for the
-     * notable-drop check below.
+     * {@link KillLootDeathEvents#onLoot}. Chest/instance rewards (raids, Barrows, Gauntlet, etc.
+     * - {@link ChestLootSourceNames}) and clue scroll caskets ({@link ClueTier}) arrive as
+     * {@code LootRecordType.EVENT}; unlike NPC loot there's no kill to correlate to, so they're
+     * logged as their own standalone "loot" event via
+     * {@link KillLootDeathEvents#onChestOrClueLoot}. PvP/pickpocket loot sources aren't logged at
+     * all yet, but everything is still eligible for the notable-drop check below regardless.
      */
     @Subscribe
     public void onLootReceived(LootReceived event) {
@@ -589,6 +592,26 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 items.add(entry);
             }
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
+        } else if (event.getType() == LootRecordType.EVENT) {
+            String clueTier = ClueTier.extractTier(event.getName());
+            boolean isClue = clueTier != null;
+            boolean isChest = !isClue && ChestLootSourceNames.isTrackedChest(event.getName());
+            if (isClue || isChest) {
+                Player local = client.getLocalPlayer();
+                WorldPoint wp = local == null ? null : local.getWorldLocation();
+                if (wp != null) {
+                    List<Map<String, Object>> items = new ArrayList<>();
+                    for (ItemStack item : event.getItems()) {
+                        Map<String, Object> entry = new HashMap<>();
+                        entry.put("itemId", item.getId());
+                        entry.put("quantity", item.getQuantity());
+                        items.add(entry);
+                    }
+                    dataManager.getKillLootDeathEvents().onChestOrClueLoot(
+                            local.getName(), isClue ? "clue" : "chest", event.getName(), clueTier,
+                            wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
+                }
+            }
         }
 
         checkNotableDrop(event.getType(), event.getName(), event.getItems());
