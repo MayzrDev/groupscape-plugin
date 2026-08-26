@@ -24,7 +24,7 @@ GroupScape — RuneScape, but better with friends.
 
 ## What it does
 
-This plugin tracks information about your RuneScape group's players and streams it to a group-scoped server, where you and your other group members can view it on a live, OSRS-themed dashboard. Currently it tracks:
+Party up and group up with your friends — something RuneScape doesn't offer natively — and see everyone's stats in one place. GroupScape streams your group's player info to a group-scoped server, where you and your other group members can view it on a live, OSRS-themed dashboard. Currently it tracks:
 
 * Inventory, equipment, bank, rune pouch, seed vault, potion storage, and shared bank
 * Skill XP
