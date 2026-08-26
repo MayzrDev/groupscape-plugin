@@ -4,6 +4,7 @@ import com.groupscape.GroupScapeTrackerConfig;
 import com.groupscape.NpcDialogueTracker;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -260,7 +261,7 @@ public class PartyFrameOverlay extends Overlay {
             members = members.subList(0, maxMembers);
         }
 
-        graphics.setFont(FontManager.getRunescapeSmallFont());
+        graphics.setFont(scaledFont());
 
         int height = padding;
         for (RosterMember member : members) {
@@ -363,6 +364,24 @@ public class PartyFrameOverlay extends Overlay {
 
     private boolean isMinimal() {
         return config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.MINIMAL;
+    }
+
+    /**
+     * Super Compact and Minimal shrink bar/line height down to 7-9px, well below what the small
+     * runescape font (sized for Normal/Compact's 8-11px rows) fits without labels overflowing
+     * their bar - so those two tiers get a proportionally smaller derived font instead.
+     */
+    private Font scaledFont() {
+        Font base = FontManager.getRunescapeSmallFont();
+        switch (config.partyOverlayScale()) {
+            case SUPER_COMPACT:
+            case MINIMAL:
+                return base.deriveFont(base.getSize2D() - 2f);
+            case COMPACT:
+                return base.deriveFont(base.getSize2D() - 1f);
+            default:
+                return base;
+        }
     }
 
     private Color bgColor() {
