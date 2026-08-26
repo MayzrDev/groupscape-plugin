@@ -93,6 +93,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
+    private boolean linkRequiredWarningShown = false;
     private boolean wasInWilderness = false;
     private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
     private static final double LOW_HP_REARM_THRESHOLD = 0.5;
@@ -117,8 +118,23 @@ public class GroupScapeTrackerPlugin extends Plugin {
             .build();
         clientToolbar.addNavigation(navigationButton);
 
+        GroupLinkListener groupLinkListener = new GroupLinkListener() {
+            @Override
+            public void onLinkRequired() {
+                if (linkRequiredWarningShown) return;
+                linkRequiredWarningShown = true;
+                sendChatMessage("GroupScape: this character isn't linked to a group yet - link it on the website to enable the party overlay.");
+            }
+
+            @Override
+            public void onLinked() {
+                linkRequiredWarningShown = false;
+            }
+        };
+        dataManager.setGroupLinkListener(groupLinkListener);
+
         rosterState = new RosterState();
-        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent);
+        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker());
         overlayManager.add(partyFrameOverlay);
@@ -145,6 +161,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             rosterClient.shutdown();
             rosterClient = null;
         }
+        dataManager.setGroupLinkListener(null);
 
         log.info("GroupScape Tracker stopped!");
     }
@@ -164,9 +181,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /**
      * Connects/reconnects the party overlay's WebSocket whenever the configured API key or the
-     * client's account hash changes. Linking to a character/group now happens automatically on
-     * the server the moment it sees this accountHash + apiKey pair, so there's nothing else to do
-     * here.
+     * client's account hash changes. The server only accepts this connection once the character
+     * has been linked to a group via the website ({@code POST /account/characters/link-group}) -
+     * an unlinked character gets a 403 (surfaced to the player via
+     * {@link GroupLinkListener#onLinkRequired()}) and keeps retrying every 5s until that link
+     * exists.
      */
     private void reconcileRosterConnection() {
         dataManager.identify();

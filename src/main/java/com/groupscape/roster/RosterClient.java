@@ -1,5 +1,6 @@
 package com.groupscape.roster;
 
+import com.groupscape.GroupLinkListener;
 import com.google.gson.Gson;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -35,6 +36,7 @@ public class RosterClient {
     private final Gson gson;
     private final RosterState rosterState;
     private final KillEventListener killEventListener;
+    private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
                 Thread t = new Thread(r, "groupscape-roster-reconnect");
@@ -47,11 +49,13 @@ public class RosterClient {
     private String connectedAccountHash;
     private String connectedApiKey;
 
-    public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener) {
+    public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
+                         GroupLinkListener groupLinkListener) {
         this.okHttpClient = okHttpClient;
         this.gson = gson;
         this.rosterState = rosterState;
         this.killEventListener = killEventListener;
+        this.groupLinkListener = groupLinkListener;
     }
 
     /** No-op if already connected to this exact accountHash+apiKey. */
@@ -93,6 +97,11 @@ public class RosterClient {
 
         webSocket = okHttpClient.newWebSocket(request, new WebSocketListener() {
             @Override
+            public void onOpen(WebSocket webSocket, Response response) {
+                groupLinkListener.onLinked();
+            }
+
+            @Override
             public void onMessage(WebSocket webSocket, String text) {
                 handleMessage(text);
             }
@@ -105,6 +114,9 @@ public class RosterClient {
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, Response response) {
                 log.debug("Party overlay WebSocket failure: {}", t.toString());
+                if (response != null && response.code() == 403) {
+                    groupLinkListener.onLinkRequired();
+                }
                 scheduleReconnect(baseUrl, accountHash, apiKey);
             }
         });

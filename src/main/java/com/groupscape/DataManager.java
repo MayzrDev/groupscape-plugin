@@ -26,6 +26,12 @@ public class DataManager {
     @Inject
     private ScheduledExecutorService executor;
     private int skipNextNAttempts = 0;
+    private GroupLinkListener groupLinkListener;
+
+    /** Called once from plugin startup; not constructor-injected since Guice owns this singleton. */
+    public void setGroupLinkListener(GroupLinkListener groupLinkListener) {
+        this.groupLinkListener = groupLinkListener;
+    }
 
     @Getter
     private final DataState inventory = new DataState("inventory", false);
@@ -121,8 +127,14 @@ public class DataManager {
                 if (!response.isSuccessful()) {
                     skipNextNAttempts = 10;
                     restoreStateIfNothingUpdated();
+                    if (response.getCode() == 403 && groupLinkListener != null) {
+                        groupLinkListener.onLinkRequired();
+                    }
                 } else {
                     collectionLogV2Manager.clearClogItems();
+                    if (groupLinkListener != null) {
+                        groupLinkListener.onLinked();
+                    }
                 }
             } else {
                 log.debug("Skip POST: no changes to send (fields={})", updates.size());
