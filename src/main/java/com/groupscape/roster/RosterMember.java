@@ -7,7 +7,7 @@ import java.util.List;
 /** Mutable per-member vitals snapshot the overlay renders from. */
 public class RosterMember {
     /** Shared by {@code PartyFrameOverlay} and {@code RosterNotifier} so both agree on "offline". */
-    public static final long OFFLINE_THRESHOLD_MS = 60_000;
+    public static final long OFFLINE_THRESHOLD_MS = 30_000;
 
     public final String name;
     public String color = "#808080";
@@ -56,10 +56,12 @@ public class RosterMember {
             try {
                 this.lastHeartbeatAt = Instant.parse(vitals.lastHeartbeatAt);
             } catch (Exception ignored) {
-                this.lastHeartbeatAt = Instant.now();
+                this.lastHeartbeatAt = null;
             }
         } else {
-            this.lastHeartbeatAt = Instant.now();
+            // No heartbeat on record for this member (e.g. they've never sent vitals) -
+            // null means offline (see isOffline()), not "just seen".
+            this.lastHeartbeatAt = null;
         }
     }
 }
