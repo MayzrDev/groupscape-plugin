@@ -34,16 +34,14 @@ import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ColorUtil;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.LinkBrowser;
 import net.runelite.client.util.Text;
 import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
-import java.awt.image.BufferedImage;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -113,7 +111,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         GroupScapePanel panel = new GroupScapePanel(() -> LinkBrowser.browse(httpRequestService.getBaseUrl()));
         navigationButton = NavigationButton.builder()
             .tooltip("GroupScape")
-            .icon(createNavigationIcon())
+            .icon(ImageUtil.loadImageResource(getClass(), "icon.png"))
             .panel(panel)
             .build();
         clientToolbar.addNavigation(navigationButton);
@@ -164,19 +162,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.setGroupLinkListener(null);
 
         log.info("GroupScape Tracker stopped!");
-    }
-
-    private static BufferedImage createNavigationIcon() {
-        BufferedImage image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D graphics = image.createGraphics();
-        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        graphics.setColor(new Color(39, 174, 96));
-        graphics.fillOval(2, 2, 28, 28);
-        graphics.setColor(Color.WHITE);
-        graphics.setFont(graphics.getFont().deriveFont(20f));
-        graphics.drawString("G", 8, 23);
-        graphics.dispose();
-        return image;
     }
 
     /**
