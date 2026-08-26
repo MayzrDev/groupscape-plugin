@@ -7,6 +7,7 @@ import java.awt.Dimension;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -99,6 +100,15 @@ public class PartyFrameOverlay extends Overlay {
             Prayer.RETRIBUTION, Prayer.REDEMPTION, Prayer.SMITE
     );
     private static final Color OVERHEAD_TINT = new Color(232, 197, 71, 130);
+
+    // Activating one of these "upgraded" curses also flags its base tri-prayer as active in the
+    // client's prayer state, so without this the row would show both e.g. Rigour and Deadeye at
+    // once even though only Deadeye is actually selected in-game.
+    private static final Map<Prayer, Prayer> BASE_PRAYER_SUPPRESSED_BY_UPGRADE = new EnumMap<>(Prayer.class);
+    static {
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.RIGOUR, Prayer.DEADEYE);
+        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.AUGURY, Prayer.MYSTIC_VIGOUR);
+    }
 
     private static final Map<Prayer, Integer> PRAYER_SPRITE_IDS = buildPrayerSpriteIds();
 
@@ -436,7 +446,7 @@ public class PartyFrameOverlay extends Overlay {
         if (!config.partyOverlayHideHp()) height += barHeight + barGap;
         if (!config.partyOverlayHidePrayer()) {
             height += barHeight + barGap;
-            if (!config.partyOverlayHidePrayerIcons()) {
+            if (!config.partyOverlayHidePrayerIcons() && !visibleActivePrayers(member).isEmpty()) {
                 height += prayerIconRowHeight;
             }
         }
@@ -479,9 +489,11 @@ public class PartyFrameOverlay extends Overlay {
             y += barHeight + barGap;
 
             if (!config.partyOverlayHidePrayerIcons()) {
-                List<String> activePrayers = member.activePrayers != null ? member.activePrayers : Collections.emptyList();
-                drawPrayerIcons(graphics, textX, y, activePrayers);
-                y += prayerIconRowHeight;
+                List<String> activePrayers = visibleActivePrayers(member);
+                if (!activePrayers.isEmpty()) {
+                    drawPrayerIcons(graphics, textX, y, activePrayers);
+                    y += prayerIconRowHeight;
+                }
             }
         }
 
@@ -553,7 +565,7 @@ public class PartyFrameOverlay extends Overlay {
         graphics.drawString("Tgt", x, y + barHeight - 2);
 
         FontMetrics metrics = graphics.getFontMetrics();
-        String hpText = hasRatio ? member.targetHealthRatio + "/" + member.targetHealthScale : null;
+        String hpText = hasRatio ? targetHealthPercent(member) + "%" : null;
         int valueWidth = hpText != null ? metrics.stringWidth(hpText) + 4 : 0;
 
         int labelWidth = 22;
@@ -565,8 +577,7 @@ public class PartyFrameOverlay extends Overlay {
 
         int filledWidth = barWidth;
         if (hasRatio) {
-            double ratio = Math.max(0, Math.min(1.0, member.targetHealthRatio / (double) member.targetHealthScale));
-            filledWidth = (int) (ratio * barWidth);
+            filledWidth = (int) (targetHealthRatio(member) * barWidth);
         }
         graphics.setColor(fill);
         graphics.fillRect(barX, y, filledWidth, barHeight);
@@ -582,6 +593,15 @@ public class PartyFrameOverlay extends Overlay {
             graphics.setColor(labelColor);
             graphics.drawString(hpText, barX + barWidth + 4, y + barHeight - 2);
         }
+    }
+
+    /** Clamped current/scale ratio for a target with a known health scale, mirroring the webapp's player-interacting component. */
+    private static double targetHealthRatio(RosterMember member) {
+        return Math.max(0, Math.min(1.0, member.targetHealthRatio / (double) member.targetHealthScale));
+    }
+
+    private static long targetHealthPercent(RosterMember member) {
+        return Math.round(targetHealthRatio(member) * 100);
     }
 
     private static String truncateToWidth(FontMetrics metrics, String text, int maxWidth) {
@@ -607,14 +627,41 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     /**
+     * The member's active prayers, with base tri-prayers dropped when their upgraded curse
+     * replacement (e.g. Deadeye over Rigour) is active too. Returns an empty list (not just a
+     * missing field) so callers can use it directly to decide whether to reserve the icon row.
+     */
+    private static List<String> visibleActivePrayers(RosterMember member) {
+        List<String> raw = member.activePrayers;
+        if (raw == null || raw.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Set<Prayer> active = EnumSet.noneOf(Prayer.class);
+        for (String name : raw) {
+            Prayer prayer = parsePrayer(name);
+            if (prayer != null) {
+                active.add(prayer);
+            }
+        }
+
+        List<String> visible = new ArrayList<>(raw.size());
+        for (String name : raw) {
+            Prayer prayer = parsePrayer(name);
+            Prayer upgrade = prayer != null ? BASE_PRAYER_SUPPRESSED_BY_UPGRADE.get(prayer) : null;
+            if (upgrade != null && active.contains(upgrade)) {
+                continue;
+            }
+            visible.add(name);
+        }
+        return visible;
+    }
+
+    /**
      * Draws real prayer-tab sprites for each active prayer, overhead/protection prayers first
      * (gold-tinted), overflowing into a plain "+N" once the row runs out of width.
      */
     private void drawPrayerIcons(Graphics2D graphics, int x, int y, List<String> activePrayerNames) {
-        if (activePrayerNames.isEmpty()) {
-            return;
-        }
-
         List<String> ordered = new ArrayList<>(activePrayerNames);
         ordered.sort(Comparator.comparingInt(name -> isOverheadPrayerName(name) ? 0 : 1));
 
@@ -650,7 +697,20 @@ public class PartyFrameOverlay extends Overlay {
         }
 
         if (sprite != null) {
-            graphics.drawImage(sprite, x, y, prayerIconSize, prayerIconSize, null);
+            // Sprites aren't all the same aspect ratio - stretching to a square box visibly
+            // squishes the wider/taller ones, so scale uniformly and center instead.
+            double scale = Math.min(prayerIconSize / (double) sprite.getWidth(), prayerIconSize / (double) sprite.getHeight());
+            int drawWidth = (int) Math.round(sprite.getWidth() * scale);
+            int drawHeight = (int) Math.round(sprite.getHeight() * scale);
+            int drawX = x + (prayerIconSize - drawWidth) / 2;
+            int drawY = y + (prayerIconSize - drawHeight) / 2;
+
+            Object previousHint = graphics.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
+            graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.drawImage(sprite, drawX, drawY, drawWidth, drawHeight, null);
+            if (previousHint != null) {
+                graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, previousHint);
+            }
         } else {
             graphics.setColor(TRACK_COLOR);
             graphics.fillOval(x, y, prayerIconSize, prayerIconSize);
