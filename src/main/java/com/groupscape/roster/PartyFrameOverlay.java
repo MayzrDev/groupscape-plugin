@@ -263,9 +263,15 @@ public class PartyFrameOverlay extends Overlay {
 
         graphics.setFont(scaledFont());
 
+        Map<RosterMember, Boolean> offlineByMember = new LinkedHashMap<>();
+        for (RosterMember member : members) {
+            boolean self = member.name.equalsIgnoreCase(localPlayer.getName());
+            offlineByMember.put(member, !self && isOffline(member));
+        }
+
         int height = padding;
         for (RosterMember member : members) {
-            height += memberHeight(member);
+            height += memberHeight(member, offlineByMember.get(member));
         }
         if (extraCount > 0) {
             height += lineHeight;
@@ -278,11 +284,11 @@ public class PartyFrameOverlay extends Overlay {
         int y = padding;
         for (RosterMember member : members) {
             boolean self = member.name.equalsIgnoreCase(localPlayer.getName());
-            boolean offline = !self && isOffline(member);
+            boolean offline = offlineByMember.get(member);
             boolean outOfVicinity = !self && !offline && config.partyOverlayFadeOutOfVicinity()
                     && !withinVicinity(member, config.partyOverlayVicinityFadeTiles());
             int startY = y;
-            y = drawMember(graphics, member, y, offline || outOfVicinity);
+            y = drawMember(graphics, member, y, offline, offline || outOfVicinity);
             lastRenderedRows.put(new Rectangle(0, startY, PANEL_WIDTH, y - startY), member);
         }
 
@@ -527,8 +533,12 @@ public class PartyFrameOverlay extends Overlay {
         return Instant.now().toEpochMilli() - member.lastHeartbeatAt.toEpochMilli() >= RosterMember.OFFLINE_THRESHOLD_MS;
     }
 
-    private int memberHeight(RosterMember member) {
+    private int memberHeight(RosterMember member, boolean offline) {
         int height = lineHeight; // name row
+
+        if (offline) {
+            return height + memberGap;
+        }
 
         if (isMinimal()) {
             if (hasVisibleClusterBar()) height += barHeight + barGap;
@@ -559,7 +569,7 @@ public class PartyFrameOverlay extends Overlay {
                 || !config.partyOverlayHideRun() || !config.partyOverlayHideSpec();
     }
 
-    private int drawMember(Graphics2D graphics, RosterMember member, int y, boolean faded) {
+    private int drawMember(Graphics2D graphics, RosterMember member, int y, boolean offline, boolean faded) {
         int startY = y;
         Color stripeColor = memberColor(member.color);
 
@@ -570,15 +580,23 @@ public class PartyFrameOverlay extends Overlay {
         }
 
         graphics.setColor(stripeColor);
-        graphics.fillRect(padding, y, 2, memberHeight(member) - memberGap);
+        graphics.fillRect(padding, y, 2, memberHeight(member, offline) - memberGap);
 
         int textX = padding + 6;
         int barWidth = PANEL_WIDTH - textX - padding;
 
-        graphics.setColor(TEXT);
-        String nameLine = member.name + (!config.partyOverlayHideWorld() && member.world != null ? "  W" + member.world : "");
+        graphics.setColor(offline ? toGrayscale(TEXT) : TEXT);
+        String status = offline ? "Offline" : (!config.partyOverlayHideWorld() && member.world != null ? "W" + member.world : null);
+        String nameLine = member.name + (status != null ? "  " + status : "");
         graphics.drawString(nameLine, textX, y + 10);
         y += lineHeight;
+
+        if (offline) {
+            if (faded) {
+                graphics.setComposite(originalComposite);
+            }
+            return startY + memberHeight(member, offline);
+        }
 
         if (isMinimal()) {
             if (hasVisibleClusterBar()) {
@@ -603,7 +621,7 @@ public class PartyFrameOverlay extends Overlay {
                 graphics.setComposite(originalComposite);
             }
 
-            return startY + memberHeight(member);
+            return startY + memberHeight(member, offline);
         }
 
         if (!config.partyOverlayHideHp()) {
@@ -643,7 +661,7 @@ public class PartyFrameOverlay extends Overlay {
             graphics.setComposite(originalComposite);
         }
 
-        return startY + memberHeight(member);
+        return startY + memberHeight(member, offline);
     }
 
     private void drawBar(Graphics2D graphics, int x, int y, int width, String label, Integer value, Integer max, Color color) {
@@ -952,6 +970,12 @@ public class PartyFrameOverlay extends Overlay {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /** Desaturates a color to gray while preserving its alpha and perceived brightness. */
+    private static Color toGrayscale(Color c) {
+        int gray = (int) Math.round(0.299 * c.getRed() + 0.587 * c.getGreen() + 0.114 * c.getBlue());
+        return new Color(gray, gray, gray, c.getAlpha());
     }
 
     private static Color memberColor(String hex) {
