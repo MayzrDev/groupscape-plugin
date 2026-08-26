@@ -46,6 +46,7 @@ public class RosterClient {
 
     private WebSocket webSocket;
     private volatile boolean intentionallyClosed = true;
+    private String connectedBaseUrl;
     private String connectedAccountHash;
     private String connectedApiKey;
 
@@ -58,18 +59,22 @@ public class RosterClient {
         this.groupLinkListener = groupLinkListener;
     }
 
-    /** No-op if already connected to this exact accountHash+apiKey. */
+    /** No-op if already connected to this exact baseUrl+accountHash+apiKey. */
     public synchronized void connect(String baseUrl, String accountHash, String apiKey) {
         if (baseUrl == null || accountHash == null || apiKey == null || apiKey.trim().isEmpty()) {
             disconnect();
             return;
         }
-        if (webSocket != null && accountHash.equals(connectedAccountHash) && apiKey.equals(connectedApiKey)) {
+        if (webSocket != null
+                && baseUrl.equals(connectedBaseUrl)
+                && accountHash.equals(connectedAccountHash)
+                && apiKey.equals(connectedApiKey)) {
             return;
         }
 
         disconnect();
         intentionallyClosed = false;
+        connectedBaseUrl = baseUrl;
         connectedAccountHash = accountHash;
         connectedApiKey = apiKey;
         openSocket(baseUrl, accountHash, apiKey);
@@ -77,6 +82,7 @@ public class RosterClient {
 
     public synchronized void disconnect() {
         intentionallyClosed = true;
+        connectedBaseUrl = null;
         connectedAccountHash = null;
         connectedApiKey = null;
         if (webSocket != null) {
