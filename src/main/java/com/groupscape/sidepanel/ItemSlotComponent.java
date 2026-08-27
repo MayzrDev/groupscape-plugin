@@ -31,6 +31,7 @@ class ItemSlotComponent extends JComponent {
     private int itemId;
     private int lastQuantity = -1;
     private int requestToken;
+    private double iconScale = 1.0;
 
     ItemSlotComponent(ItemManager itemManager, ClientThread clientThread) {
         this.itemManager = itemManager;
@@ -44,6 +45,12 @@ class ItemSlotComponent extends JComponent {
                 }
             }
         });
+    }
+
+    /** Fraction of the slot's box the icon fills at most, e.g. 0.5 draws it at half size, centered. */
+    void setIconScale(double iconScale) {
+        this.iconScale = iconScale;
+        repaint();
     }
 
     void setItem(int id, int quantity) {
@@ -102,7 +109,7 @@ class ItemSlotComponent extends JComponent {
             return;
         }
 
-        double scale = Math.min(getWidth() / (double) sprite.getWidth(), getHeight() / (double) sprite.getHeight());
+        double scale = iconScale * Math.min(getWidth() / (double) sprite.getWidth(), getHeight() / (double) sprite.getHeight());
         int w = (int) Math.round(sprite.getWidth() * scale);
         int h = (int) Math.round(sprite.getHeight() * scale);
         int x = (getWidth() - w) / 2;

@@ -28,6 +28,7 @@ class InventoryGridPanel extends JPanel {
             ItemSlotComponent slot = new ItemSlotComponent(itemManager, clientThread);
             slot.setPreferredSize(SLOT_SIZE);
             slot.setBackground(new Color(255, 255, 255, 8));
+            slot.setIconScale(0.5);
             slots[i] = slot;
             add(slot);
         }
