@@ -5,7 +5,9 @@ import net.runelite.client.config.ConfigManager;
 import net.runelite.client.plugins.timetracking.TimeTrackingConfig;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -51,17 +53,26 @@ public class TimeTrackingState implements ConsumableState {
         return result;
     }
 
+    private static final Map<FarmingPatchData.Kind, String> CATEGORY_NAMES = new EnumMap<>(FarmingPatchData.Kind.class);
+
+    static {
+        CATEGORY_NAMES.put(FarmingPatchData.Kind.HERB, "herb");
+        CATEGORY_NAMES.put(FarmingPatchData.Kind.TREE, "tree");
+        CATEGORY_NAMES.put(FarmingPatchData.Kind.FRUIT_TREE, "fruit_tree");
+        CATEGORY_NAMES.put(FarmingPatchData.Kind.HARDWOOD_TREE, "hardwood_tree");
+    }
+
     private static PatchTimerEntry decodeFarmingPatch(ConfigManager configManager, FarmingPatchData.Entry patch,
                                                         Integer offsetPrecision, Integer offsetMinutes) {
-        String category = patch.kind == FarmingPatchData.Kind.HERB ? "herb" : "tree";
+        String category = CATEGORY_NAMES.get(patch.kind);
         String stored = configManager.getRSProfileConfiguration(TimeTrackingConfig.CONFIG_GROUP, patch.configKey());
         if (stored == null) {
-            return new PatchTimerEntry(category, patch.label, "unknown", null, true);
+            return new PatchTimerEntry(category, patch.label, "unknown", null, true, null);
         }
 
         String[] parts = stored.split(":");
         if (parts.length != 2) {
-            return new PatchTimerEntry(category, patch.label, "unknown", null, true);
+            return new PatchTimerEntry(category, patch.label, "unknown", null, true, null);
         }
 
         int value;
@@ -70,29 +81,30 @@ public class TimeTrackingState implements ConsumableState {
             value = Integer.parseInt(parts[0]);
             observedAt = Long.parseLong(parts[1]);
         } catch (NumberFormatException e) {
-            return new PatchTimerEntry(category, patch.label, "unknown", null, true);
+            return new PatchTimerEntry(category, patch.label, "unknown", null, true, null);
         }
 
         PatchImplementationReflector.DecodedPatch decoded = PatchImplementationReflector.decode(patch.kind.name(), value);
         if (decoded == null) {
-            return new PatchTimerEntry(category, patch.label, "unknown", null, true);
+            return new PatchTimerEntry(category, patch.label, "unknown", null, true, null);
         }
 
         Long readyAt = TickOffsetMath.estimateReadyAt(decoded, observedAt, offsetPrecision, offsetMinutes);
         String status = decoded.cropState.toLowerCase();
-        String label = decoded.produceItemId >= 0 ? decoded.produceName + " - " + patch.label : patch.label;
-        return new PatchTimerEntry(category, label, status, readyAt, false);
+        Integer produceItemId = decoded.produceItemId >= 0 ? decoded.produceItemId : null;
+        String label = produceItemId != null ? decoded.produceName + " - " + patch.label : patch.label;
+        return new PatchTimerEntry(category, label, status, readyAt, false, produceItemId);
     }
 
     private static PatchTimerEntry decodeBirdHouse(ConfigManager configManager, BirdHouseSpaceData.Entry space) {
         String stored = configManager.getRSProfileConfiguration(TimeTrackingConfig.CONFIG_GROUP, space.configKey());
         if (stored == null) {
-            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true);
+            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true, null);
         }
 
         String[] parts = stored.split(":");
         if (parts.length != 2) {
-            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true);
+            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true, null);
         }
 
         int varp;
@@ -101,18 +113,18 @@ public class TimeTrackingState implements ConsumableState {
             varp = Integer.parseInt(parts[0]);
             observedAt = Long.parseLong(parts[1]);
         } catch (NumberFormatException e) {
-            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true);
+            return new PatchTimerEntry("birdhouse", space.label, "unknown", null, true, null);
         }
 
         if (varp <= 0) {
-            return new PatchTimerEntry("birdhouse", space.label, "empty", null, false);
+            return new PatchTimerEntry("birdhouse", space.label, "empty", null, false, null);
         }
         if (!BirdHouseSpaceData.isSeeded(varp)) {
-            return new PatchTimerEntry("birdhouse", space.label, "built", null, false);
+            return new PatchTimerEntry("birdhouse", space.label, "built", null, false, null);
         }
 
         long readyAt = observedAt + BirdHouseSpaceData.DURATION_SECONDS;
-        return new PatchTimerEntry("birdhouse", space.label, "seeded", readyAt, false);
+        return new PatchTimerEntry("birdhouse", space.label, "seeded", readyAt, false, null);
     }
 
     private static Integer getIntConfig(ConfigManager configManager, String key) {

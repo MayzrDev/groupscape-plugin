@@ -2,12 +2,17 @@ package com.groupscape;
 
 import com.google.gson.Gson;
 import com.google.inject.Provides;
+import com.groupscape.roster.GroupSnapshotClient;
+import com.groupscape.roster.GroupSnapshotMember;
+import com.groupscape.roster.GroupSnapshotState;
+import com.groupscape.roster.LocalRosterMemberFactory;
 import com.groupscape.roster.PartyFrameOverlay;
 import com.groupscape.roster.RosterClient;
 import com.groupscape.roster.RosterMember;
 import com.groupscape.roster.RosterNotifier;
 import com.groupscape.roster.RosterState;
 import com.groupscape.roster.TileHighlightOverlay;
+import com.groupscape.sidepanel.LocalGroupSnapshotFactory;
 import com.groupscape.timetracking.TimeTrackingState;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -66,6 +71,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private net.runelite.client.game.SpriteManager spriteManager;
     @Inject
+    private net.runelite.client.game.SkillIconManager skillIconManager;
+    @Inject
     private CollectionLogWidgetSubscriber collectionLogWidgetSubscriber;
     @Inject
     private PortraitCaptureManager portraitCaptureManager;
@@ -91,8 +98,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private RosterState rosterState;
     private RosterClient rosterClient;
     private RosterNotifier rosterNotifier;
+    private GroupSnapshotState groupSnapshotState;
+    private GroupSnapshotClient groupSnapshotClient;
     private PartyFrameOverlay partyFrameOverlay;
     private TileHighlightOverlay tileHighlightOverlay;
+    /**
+     * The sidepanel's own "you" row, rebuilt on the client thread each
+     * {@link #updateThingsThatDoChangeOften} tick and read from the Swing EDT via
+     * {@link GroupScapePanel}'s refresh timer. RuneLite's {@link Client} is not safe to call from
+     * the EDT directly (unlike {@link PartyFrameOverlay}, which reads it during client-thread
+     * rendering) - these two fields are the hand-off point.
+     */
+    private volatile RosterMember localMember;
+    private volatile GroupSnapshotMember localSnapshot;
     private int itemsDeposited = 0;
     private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
@@ -111,6 +129,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
     private static final double LOW_HP_REARM_THRESHOLD = 0.5;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
+    private static final int SECONDS_BETWEEN_GROUP_SNAPSHOT_POLL = 5;
     private static final int SECONDS_BETWEEN_INFREQUENT_DATA_CHANGES = 60;
     private static final int SECONDS_BETWEEN_PORTRAIT_BACKSTOP = 300;
     private static final int DEPOSIT_ITEM = 12582914;
@@ -123,7 +142,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
     protected void startUp() throws Exception {
         collectionLogWidgetSubscriber.startUp();
 
-        GroupScapePanel panel = new GroupScapePanel(() -> LinkBrowser.browse(httpRequestService.getBaseUrl()));
+        rosterState = new RosterState();
+        groupSnapshotState = new GroupSnapshotState();
+        groupSnapshotClient = new GroupSnapshotClient(httpRequestService, gson, groupSnapshotState);
+
+        GroupScapePanel panel = new GroupScapePanel(
+                () -> LinkBrowser.browse(httpRequestService.getBaseUrl()),
+                client, config, rosterState, groupSnapshotState, itemManager, skillIconManager, spriteManager,
+                clientThread, () -> localMember, () -> localSnapshot);
         navigationButton = NavigationButton.builder()
             .tooltip("GroupScape")
             .icon(ImageUtil.loadImageResource(getClass(), "icon.png"))
@@ -146,7 +172,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
         };
         dataManager.setGroupLinkListener(groupLinkListener);
 
-        rosterState = new RosterState();
         rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent, groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
@@ -180,6 +205,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
             rosterClient.shutdown();
             rosterClient = null;
         }
+        groupSnapshotClient = null;
+        if (groupSnapshotState != null) {
+            groupSnapshotState.clear();
+            groupSnapshotState = null;
+        }
+        localMember = null;
+        localSnapshot = null;
         dataManager.setGroupLinkListener(null);
 
         log.info("GroupScape Tracker stopped!");
@@ -193,6 +225,20 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@link GroupLinkListener#onLinkRequired()}) and keeps retrying every 5s until that link
      * exists.
      */
+    /**
+     * Rebuilds the sidepanel's "you" row on the client thread - see {@link #localMember}'s doc
+     * for why this can't just be called lazily from the panel's own Swing refresh timer.
+     */
+    private void updateLocalSidepanelSnapshot() {
+        if (doNotUseThisData()) {
+            localMember = null;
+            localSnapshot = null;
+            return;
+        }
+        localMember = LocalRosterMemberFactory.build(client, dataManager.getNpcDialogueTracker());
+        localSnapshot = LocalGroupSnapshotFactory.build(client);
+    }
+
     private void reconcileRosterConnection() {
         dataManager.identify();
 
@@ -217,11 +263,25 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     @Schedule(
+            period = SECONDS_BETWEEN_GROUP_SNAPSHOT_POLL,
+            unit = ChronoUnit.SECONDS,
+            asynchronous = true
+    )
+    public void pollGroupSnapshot() {
+        String apiKey = config.apiKey().trim();
+        long accountHashValue = client.getAccountHash();
+        if (apiKey.isEmpty() || accountHashValue == -1) return;
+
+        groupSnapshotClient.poll(httpRequestService.getBaseUrl(), String.valueOf(accountHashValue), apiKey);
+    }
+
+    @Schedule(
             period = SECONDS_BETWEEN_UPLOADS,
             unit = ChronoUnit.SECONDS
     )
     public void updateThingsThatDoChangeOften() {
         reconcileRosterConnection();
+        updateLocalSidepanelSnapshot();
 
         if (doNotUseThisData())
             return;

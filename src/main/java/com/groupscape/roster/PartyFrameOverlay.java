@@ -20,14 +20,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import net.runelite.api.Actor;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.Prayer;
-import net.runelite.api.Skill;
 import net.runelite.api.SpriteID;
-import net.runelite.api.VarPlayer;
-import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.game.SpriteManager;
 import net.runelite.client.ui.FontManager;
 import net.runelite.client.ui.overlay.Overlay;
@@ -445,58 +441,7 @@ public class PartyFrameOverlay extends Overlay {
 
     /** Reads the local player's own vitals straight from Client, avoiding any WebSocket round-trip. */
     private RosterMember buildSelfRow(String name) {
-        RosterMember self = new RosterMember(name);
-        self.color = "#FFD700";
-        self.hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
-        self.maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
-        self.prayer = client.getBoostedSkillLevel(Skill.PRAYER);
-        self.maxPrayer = client.getRealSkillLevel(Skill.PRAYER);
-        self.runEnergy = client.getEnergy() / 100;
-        self.specEnergy = client.getVarpValue(VarPlayer.SPECIAL_ATTACK_PERCENT) / 10;
-        self.world = client.getWorld();
-        self.lastHeartbeatAt = Instant.now();
-        self.activePrayers = new ActivePrayersStateReader(client).activePrayerNames();
-        applyLocalTarget(self);
-        return self;
-    }
-
-    /**
-     * Fills the self row's target fields straight from Client, the same signals
-     * {@link com.groupscape.RichPresenceState} used to build its text ("Fighting X" / "Talking to
-     * X" / "Browsing the bank"), but kept as structured name+ratio+scale so the bar can render an
-     * actual HP fill instead of a static line of text.
-     */
-    private void applyLocalTarget(RosterMember self) {
-        Player player = client.getLocalPlayer();
-
-        Actor interacting = player.getInteracting();
-        if (interacting != null && interacting.getName() != null) {
-            self.targetName = interacting.getName();
-            self.targetHealthScale = interacting.getHealthScale();
-            self.targetHealthRatio = interacting.getHealthRatio();
-            return;
-        }
-
-        // getInteracting() has already gone null once the dialogue box is actually open (see
-        // NpcDialogueTracker) but the box is still up, so the player is still "talking to"
-        // whoever they last targeted.
-        if (dialogueTracker != null && dialogueTracker.lastNpcName() != null) {
-            self.targetName = dialogueTracker.lastNpcName();
-            self.targetHealthScale = 0;
-            self.targetHealthRatio = -1;
-            return;
-        }
-
-        if (client.getWidget(InterfaceID.Bankmain.ITEMS) != null) {
-            self.targetName = "Bank";
-            self.targetHealthScale = 0;
-            self.targetHealthRatio = -1;
-            return;
-        }
-
-        self.targetName = null;
-        self.targetHealthScale = null;
-        self.targetHealthRatio = null;
+        return LocalRosterMemberFactory.build(client, dialogueTracker);
     }
 
     private void sortMembers(List<RosterMember> members) {
@@ -1002,22 +947,4 @@ public class PartyFrameOverlay extends Overlay {
         graphics.drawRoundRect(0, 0, width - 1, height - 1, 6, 6);
     }
 
-    /** Small local helper so the self-row can reuse the same active-prayer scan as {@code ActivePrayersState}. */
-    private static class ActivePrayersStateReader {
-        private final Client client;
-
-        ActivePrayersStateReader(Client client) {
-            this.client = client;
-        }
-
-        List<String> activePrayerNames() {
-            List<String> names = new ArrayList<>();
-            for (net.runelite.api.Prayer prayer : net.runelite.api.Prayer.values()) {
-                if (client.isPrayerActive(prayer)) {
-                    names.add(prayer.name());
-                }
-            }
-            return names;
-        }
-    }
 }

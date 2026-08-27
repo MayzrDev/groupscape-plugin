@@ -5,6 +5,7 @@ import net.runelite.api.Client;
 import net.runelite.api.NPC;
 import net.runelite.api.Player;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.widgets.Widget;
 
 /**
  * Derives a short human-readable activity string ("Fighting Zulrah", "Talking
@@ -55,7 +56,8 @@ public class RichPresenceState implements ConsumableState {
             return "Talking to " + dialogueTracker.lastNpcName();
         }
 
-        if (client.getWidget(InterfaceID.Bankmain.ITEMS) != null) {
+        Widget bankItems = client.getWidget(InterfaceID.Bankmain.ITEMS);
+        if (bankItems != null && !bankItems.isHidden()) {
             return "Browsing the bank";
         }
 

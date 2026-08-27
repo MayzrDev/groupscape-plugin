@@ -320,9 +320,188 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigSection(
+            name = "Sidepanel roster",
+            description = "Configure the group roster shown in the GroupScape sidepanel",
+            position = 4
+    )
+    String sidepanelSection = "SidepanelSection";
+
+    enum SidepanelSortOrder {
+        JOIN_ORDER,
+        ALPHABETICAL,
+        LOWEST_HP_FIRST
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideSelf",
+            name = "Hide own row",
+            description = "Don't show your own character in the sidepanel roster",
+            section = sidepanelSection,
+            position = 0
+    )
+    default boolean sidepanelHideSelf() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideOfflineMembers",
+            name = "Hide offline members",
+            description = "Hide members instead of showing them dimmed when offline",
+            section = sidepanelSection,
+            position = 1
+    )
+    default boolean sidepanelHideOfflineMembers() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelOfflineMembersLast",
+            name = "Offline members last",
+            description = "Always sort offline members to the bottom, regardless of sort order",
+            section = sidepanelSection,
+            position = 2
+    )
+    default boolean sidepanelOfflineMembersLast() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelSortOrder",
+            name = "Sort order",
+            description = "How to order members in the sidepanel roster",
+            section = sidepanelSection,
+            position = 3
+    )
+    default SidepanelSortOrder sidepanelSortOrder() {
+        return SidepanelSortOrder.JOIN_ORDER;
+    }
+
+    @Range(min = 0)
+    @ConfigItem(
+            keyName = "sidepanelMaxMembers",
+            name = "Max members shown",
+            description = "Truncate the sidepanel roster to this many members (0 = unlimited)",
+            section = sidepanelSection,
+            position = 4
+    )
+    default int sidepanelMaxMembers() {
+        return 0;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideWorld",
+            name = "Hide world",
+            description = "Hide the world number next to each member's name",
+            section = sidepanelSection,
+            position = 5
+    )
+    default boolean sidepanelHideWorld() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideHp",
+            name = "Hide HP bar",
+            description = "Hide the hitpoints bar",
+            section = sidepanelSection,
+            position = 6
+    )
+    default boolean sidepanelHideHp() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHidePrayer",
+            name = "Hide prayer bar",
+            description = "Hide the prayer bar",
+            section = sidepanelSection,
+            position = 7
+    )
+    default boolean sidepanelHidePrayer() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHidePrayerIcons",
+            name = "Hide active prayer icons",
+            description = "Hide the active-prayer icon row, keeping the prayer bar itself visible",
+            section = sidepanelSection,
+            position = 8
+    )
+    default boolean sidepanelHidePrayerIcons() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideRun",
+            name = "Hide run energy bar",
+            description = "Hide the run energy bar",
+            section = sidepanelSection,
+            position = 9
+    )
+    default boolean sidepanelHideRun() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideSpec",
+            name = "Hide special attack bar",
+            description = "Hide the special attack bar",
+            section = sidepanelSection,
+            position = 10
+    )
+    default boolean sidepanelHideSpec() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelHideTarget",
+            name = "Hide target bar",
+            description = "Hide the target HP bar (combat target, bank, or NPC being talked to)",
+            section = sidepanelSection,
+            position = 11
+    )
+    default boolean sidepanelHideTarget() {
+        return false;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelShowInventoryTab",
+            name = "Show Bag tab",
+            description = "Show the inventory (Bag) expand button on each member's card",
+            section = sidepanelSection,
+            position = 12
+    )
+    default boolean sidepanelShowInventoryTab() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelShowEquipmentTab",
+            name = "Show Gear tab",
+            description = "Show the equipment (Gear) expand button on each member's card",
+            section = sidepanelSection,
+            position = 13
+    )
+    default boolean sidepanelShowEquipmentTab() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "sidepanelShowSkillsTab",
+            name = "Show Stats tab",
+            description = "Show the skills (Stats) expand button on each member's card",
+            section = sidepanelSection,
+            position = 14
+    )
+    default boolean sidepanelShowSkillsTab() {
+        return true;
+    }
+
+    @ConfigSection(
             name = "Sync",
             description = "Controls for sending your data to the server",
-            position = 4
+            position = 5
     )
     String syncSection = "SyncSection";
 
@@ -339,7 +518,7 @@ public interface GroupScapeTrackerConfig extends Config {
     @ConfigSection(
             name = "Notifications",
             description = "Chat notifications for group events",
-            position = 5
+            position = 6
     )
     String notificationsSection = "NotificationsSection";
 
