@@ -93,10 +93,19 @@ class ItemSlotComponent extends JComponent {
         if (quantity > 1) {
             html.append(" (").append(String.format("%,d", quantity)).append(")");
         }
-        html.append("<br>GE: ").append(String.format("%,d", gePrice));
-        html.append("<br>HA: ").append(String.format("%,d", haPrice));
+        html.append("<br>GE: ").append(priceLine(gePrice, quantity));
+        html.append("<br>HA: ").append(priceLine(haPrice, quantity));
         html.append("</html>");
         return html.toString();
+    }
+
+    /** Matches the vanilla client's stacked-item tooltip: total stack value, each price alongside it. */
+    private static String priceLine(int eachPrice, int quantity) {
+        if (quantity > 1) {
+            long total = (long) eachPrice * quantity;
+            return String.format("%,d gp (%,d ea)", total, eachPrice);
+        }
+        return String.format("%,d gp", eachPrice);
     }
 
     @Override
