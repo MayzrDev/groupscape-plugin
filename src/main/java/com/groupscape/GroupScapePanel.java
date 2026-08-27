@@ -12,6 +12,7 @@ import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Timer;
 import net.runelite.api.Client;
@@ -62,6 +63,12 @@ class GroupScapePanel extends PluginPanel {
                 ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED, ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scrollPane.setBorder(BorderFactory.createEmptyBorder(8, 0, 0, 0));
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        // BLIT_SCROLL_MODE (the default) copies existing pixels around on scroll/resize instead
+        // of repainting them - a card growing when a tab opens shifts everything below it, and
+        // that blit copy was leaving stale fragments (a card's old header/vitals) behind in
+        // whatever now-different content scrolled into that spot. Always repainting properly
+        // avoids the stale copy entirely.
+        scrollPane.getViewport().setScrollMode(JViewport.SIMPLE_SCROLL_MODE);
         add(scrollPane, BorderLayout.CENTER);
 
         refreshTimer = new Timer(REFRESH_MS, e -> rosterListPanel.refresh(
