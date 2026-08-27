@@ -70,6 +70,8 @@ public class DataManager {
     @Getter
     private final DataState richPresence = new DataState("rich_presence", false);
     @Getter
+    private final DataState farmingTimers = new DataState("farming_timers", false);
+    @Getter
     private final DepositedItems deposited = new DepositedItems();
     @Getter
     private final KillLootDeathEvents killLootDeathEvents = new KillLootDeathEvents();
@@ -117,6 +119,7 @@ public class DataManager {
             specialAttack.consumeState(updates);
             activePrayers.consumeState(updates);
             richPresence.consumeState(updates);
+            farmingTimers.consumeState(updates);
             collectionLogV2Manager.consumeClogItems(updates);
             killLootDeathEvents.consumeState(updates);
             objectInteractionEvents.consumeState(updates);
@@ -216,6 +219,7 @@ public class DataManager {
         specialAttack.restoreState();
         activePrayers.restoreState();
         richPresence.restoreState();
+        farmingTimers.restoreState();
         killLootDeathEvents.restoreState();
         objectInteractionEvents.restoreState();
         interactionEvents.restoreState();
