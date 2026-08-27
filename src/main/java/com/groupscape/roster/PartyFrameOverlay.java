@@ -534,7 +534,7 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     private int memberHeight(RosterMember member, boolean offline) {
-        int height = lineHeight; // name row
+        int height = nameRowHeight(member, offline); // name row
 
         if (offline) {
             return height + memberGap;
@@ -542,10 +542,6 @@ public class PartyFrameOverlay extends Overlay {
 
         if (isMinimal()) {
             if (hasVisibleClusterBar()) height += barHeight + barGap;
-            if (!config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()
-                    && !visibleActivePrayers(member).isEmpty()) {
-                height += prayerIconRowHeight;
-            }
             if (!config.partyOverlayHideTarget()) height += targetStripHeight + barGap;
             return height + memberGap;
         }
@@ -553,14 +549,24 @@ public class PartyFrameOverlay extends Overlay {
         if (!config.partyOverlayHideHp()) height += barHeight + barGap;
         if (!config.partyOverlayHidePrayer()) {
             height += barHeight + barGap;
-            if (!config.partyOverlayHidePrayerIcons() && !visibleActivePrayers(member).isEmpty()) {
-                height += prayerIconRowHeight;
-            }
         }
         if (!config.partyOverlayHideRun()) height += barHeight + barGap;
         if (!config.partyOverlayHideSpec()) height += barHeight + barGap;
         if (!config.partyOverlayHideTarget()) height += barHeight + barGap;
         return height + memberGap;
+    }
+
+    /**
+     * Height of the name row, which now doubles as the active-prayer-icon row (icons sit between
+     * the name and the right-aligned world/offline text), so it grows past {@link #lineHeight}
+     * when the icons are taller than the text.
+     */
+    private int nameRowHeight(RosterMember member, boolean offline) {
+        if (offline || config.partyOverlayHidePrayer() || config.partyOverlayHidePrayerIcons()
+                || visibleActivePrayers(member).isEmpty()) {
+            return lineHeight;
+        }
+        return Math.max(lineHeight, prayerIconRowHeight);
     }
 
     /** True if at least one of HP/Prayer/Run/Spec is visible, i.e. the minimal cluster row has something to draw. */
@@ -585,11 +591,31 @@ public class PartyFrameOverlay extends Overlay {
         int textX = padding + 6;
         int barWidth = PANEL_WIDTH - textX - padding;
 
+        int nameRowHeight = nameRowHeight(member, offline);
+        FontMetrics metrics = graphics.getFontMetrics();
+
         graphics.setColor(offline ? toGrayscale(TEXT) : TEXT);
+        graphics.drawString(member.name, textX, y + 10);
+
         String status = offline ? "Offline" : (!config.partyOverlayHideWorld() && member.world != null ? "W" + member.world : null);
-        String nameLine = member.name + (status != null ? "  " + status : "");
-        graphics.drawString(nameLine, textX, y + 10);
-        y += lineHeight;
+        if (status != null) {
+            graphics.drawString(status, PANEL_WIDTH - padding - metrics.stringWidth(status), y + 10);
+        }
+
+        if (!offline && !config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()) {
+            List<String> activePrayers = visibleActivePrayers(member);
+            if (!activePrayers.isEmpty()) {
+                int nameEndX = textX + metrics.stringWidth(member.name) + 6;
+                int statusStartX = status != null
+                        ? PANEL_WIDTH - padding - metrics.stringWidth(status) - 6
+                        : PANEL_WIDTH - padding;
+                int availableWidth = Math.max(0, statusStartX - nameEndX);
+                int iconsY = y + (nameRowHeight - prayerIconSize) / 2;
+                drawPrayerIcons(graphics, nameEndX, iconsY, availableWidth, activePrayers);
+            }
+        }
+
+        y += nameRowHeight;
 
         if (offline) {
             if (faded) {
@@ -602,14 +628,6 @@ public class PartyFrameOverlay extends Overlay {
             if (hasVisibleClusterBar()) {
                 drawMinimalCluster(graphics, textX, y, barWidth, member);
                 y += barHeight + barGap;
-            }
-
-            if (!config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()) {
-                List<String> activePrayers = visibleActivePrayers(member);
-                if (!activePrayers.isEmpty()) {
-                    drawPrayerIcons(graphics, textX, y, activePrayers);
-                    y += prayerIconRowHeight;
-                }
             }
 
             if (!config.partyOverlayHideTarget()) {
@@ -632,14 +650,6 @@ public class PartyFrameOverlay extends Overlay {
         if (!config.partyOverlayHidePrayer()) {
             drawBar(graphics, textX, y, barWidth, "Pr", member.prayer, member.maxPrayer, PRAYER_COLOR);
             y += barHeight + barGap;
-
-            if (!config.partyOverlayHidePrayerIcons()) {
-                List<String> activePrayers = visibleActivePrayers(member);
-                if (!activePrayers.isEmpty()) {
-                    drawPrayerIcons(graphics, textX, y, activePrayers);
-                    y += prayerIconRowHeight;
-                }
-            }
         }
 
         if (!config.partyOverlayHideRun()) {
@@ -901,11 +911,10 @@ public class PartyFrameOverlay extends Overlay {
      * Draws real prayer-tab sprites for each active prayer, overhead/protection prayers first
      * (gold-tinted), overflowing into a plain "+N" once the row runs out of width.
      */
-    private void drawPrayerIcons(Graphics2D graphics, int x, int y, List<String> activePrayerNames) {
+    private void drawPrayerIcons(Graphics2D graphics, int x, int y, int availableWidth, List<String> activePrayerNames) {
         List<String> ordered = new ArrayList<>(activePrayerNames);
         ordered.sort(Comparator.comparingInt(name -> isOverheadPrayerName(name) ? 0 : 1));
 
-        int availableWidth = PANEL_WIDTH - x - padding;
         int maxIcons = Math.max(1, (availableWidth + PRAYER_ICON_GAP) / (prayerIconSize + PRAYER_ICON_GAP));
 
         int shownCount = ordered.size();
