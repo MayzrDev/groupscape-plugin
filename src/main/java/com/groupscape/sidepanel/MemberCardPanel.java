@@ -49,6 +49,7 @@ class MemberCardPanel extends JPanel {
 
     private boolean collapsed = false;
     private String activeTab = null;
+    private String lastLayoutSignature = null;
 
     MemberCardPanel(GroupScapeTrackerConfig config, ItemManager itemManager, SkillIconManager skillIconManager,
                      SpriteManager spriteManager, ClientThread clientThread) {
@@ -228,7 +229,21 @@ class MemberCardPanel extends JPanel {
             selectTab(activeTab);
         }
 
-        revalidate();
+        // Bag/gear/stats content (item icons, skill XP, etc.) repaints itself and never changes
+        // this card's size - only these flags do. Revalidating on every 600ms refresh regardless
+        // was forcing the whole RosterListPanel's BoxLayout to relayout every tick, which under
+        // Windows' hardware-accelerated Swing pipeline could paint a frame with a sibling card's
+        // stale pixels bleeding through before the real repaint caught up (the same ghosting the
+        // scroll-mode fix above addresses for actual card growth). Only revalidate when one of
+        // these actually changed.
+        String layoutSignature = offline + "|" + config.sidepanelHideHp() + "|" + config.sidepanelHidePrayer()
+                + "|" + config.sidepanelHideRun() + "|" + config.sidepanelHideSpec() + "|" + config.sidepanelHideTarget()
+                + "|" + config.sidepanelShowInventoryTab() + "|" + config.sidepanelShowEquipmentTab()
+                + "|" + config.sidepanelShowSkillsTab() + "|" + activeTab;
+        if (!layoutSignature.equals(lastLayoutSignature)) {
+            lastLayoutSignature = layoutSignature;
+            revalidate();
+        }
         repaint();
     }
 
