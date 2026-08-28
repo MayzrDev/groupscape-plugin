@@ -13,7 +13,6 @@ import com.groupscape.roster.RosterNotifier;
 import com.groupscape.roster.RosterState;
 import com.groupscape.roster.TileHighlightOverlay;
 import com.groupscape.sidepanel.LocalGroupSnapshotFactory;
-import com.groupscape.timetracking.TimeTrackingState;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
@@ -321,7 +320,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getQuests().update(new QuestState(playerName, client));
         dataManager.getAchievementDiary().update(new AchievementDiaryState(playerName, client));
         dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
-        dataManager.getFarmingTimers().update(new TimeTrackingState(playerName, configManager));
     }
 
     @Schedule(
