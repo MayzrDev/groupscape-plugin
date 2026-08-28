@@ -59,7 +59,13 @@ public class RosterClient {
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
                          DropEventListener dropEventListener, GroupLinkListener groupLinkListener) {
-        this.okHttpClient = okHttpClient;
+        // Derived from the shared RuneLite client (never mutate that one - other plugins use it).
+        // Without a ping interval, a half-open connection (e.g. the backend disappearing behind a
+        // proxy/LB during a rebuild without sending a clean close) never fires onClosed/onFailure,
+        // so scheduleReconnect() below never runs and the overlay stays dead until RuneLite restarts.
+        this.okHttpClient = okHttpClient.newBuilder()
+                .pingInterval(15, TimeUnit.SECONDS)
+                .build();
         this.gson = gson;
         this.rosterState = rosterState;
         this.killEventListener = killEventListener;
