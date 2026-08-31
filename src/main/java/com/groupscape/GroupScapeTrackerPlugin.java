@@ -794,7 +794,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 .setTarget(ColorUtil.wrapWithColorTag(label, Color.CYAN))
                 .setType(MenuAction.RUNELITE);
         Menu submenu = parent.createSubMenu();
-        for (RaidMarkerType type : RaidMarkerType.values()) {
+        RaidMarkerType[] types = RaidMarkerType.values();
+        for (int i = types.length - 1; i >= 0; i--) {
+            RaidMarkerType type = types[i];
             if (!isRaidMarkerMenuVisible(type)) continue;
             submenu.createMenuEntry(-1)
                     .setOption(type.displayName)
@@ -813,7 +815,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 .setTarget(ColorUtil.wrapWithColorTag("here", Color.CYAN))
                 .setType(MenuAction.RUNELITE);
         Menu submenu = parent.createSubMenu();
-        for (RaidMarkerType type : RaidMarkerType.values()) {
+        RaidMarkerType[] types = RaidMarkerType.values();
+        for (int i = types.length - 1; i >= 0; i--) {
+            RaidMarkerType type = types[i];
             if (!isRaidMarkerMenuVisible(type)) continue;
             submenu.createMenuEntry(-1)
                     .setOption(type.displayName)
