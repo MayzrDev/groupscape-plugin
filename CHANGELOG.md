@@ -2,6 +2,36 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.2] - 2026-08-31
+
+### Fixed
+- Fixed the hold-to-ping hotkey still not working - it now cancels the walk/attack the same way RuneLite's own Party plugin does, instead of a method that never actually suppressed it.
+
+## [1.7.11] - 2026-08-31
+
+### Fixed
+- Fixed the hold-to-ping hotkey not working at all - clicking while holding the key could cause the game to briefly steal keyboard focus, making the plugin think the key had already been released.
+- Fixed "Clear ping" (and pings ending on their own) silently failing every time.
+
+### Changed
+- You can now have one pinged monster and one pinged tile active at the same time - pinging a new tile no longer clears an in-progress monster ping, and vice versa. Right-click now shows separate "Clear NPC ping" and "Clear tile ping" options when applicable.
+
+## [1.7.10] - 2026-08-31
+
+### Fixed
+- Fixed a pinged monster's marker not showing at all - a wrong parameter to a game math function meant the floating arrow and beam kept silently failing to draw the whole time a ping was active.
+
+## [1.7.9] - 2026-08-31
+
+### Fixed
+- A pinged monster now shows an outline around its actual tile instead of its 3D model, and its floating arrow marker shows reliably above it.
+- The hold-Z ping shortcut and the right-click "Ping"/"Clear ping" options are now more reliable, and won't silently fail without at least logging what went wrong.
+
+## [1.7.8] - 2026-08-31
+
+### Added
+- You can now ping a spot or a monster for your group to see - right-click an NPC or a tile (in the game view or the world map) and choose "Ping", or hold Z and left-click in the game view for a quicker shortcut. Pings show as a colored arrow marker on the minimap, world map, and the group's website map, and a pinged monster's marker follows it around live. Pings clear themselves after about a minute, or sooner if the monster dies or you choose "Clear ping" from any right-click menu.
+
 ## [1.7.7] - 2026-08-31
 
 ### Fixed

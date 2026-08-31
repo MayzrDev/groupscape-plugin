@@ -1,9 +1,11 @@
 package com.groupscape;
 
+import java.awt.event.KeyEvent;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Keybind;
 import net.runelite.client.config.Range;
 
 @ConfigGroup("GroupScapeTracker")
@@ -335,6 +337,35 @@ public interface GroupScapeTrackerConfig extends Config {
     )
     default boolean mapMarkersEnabled() {
         return true;
+    }
+
+    @ConfigSection(
+            name = "Pings",
+            description = "Ping a tile or NPC for your group to see, in-game and on the website map",
+            position = 7
+    )
+    String pingSection = "PingSection";
+
+    @ConfigItem(
+            keyName = "pingsEnabled",
+            name = "Enable pings",
+            description = "Show the right-click \"Ping\" menu entries and other group members' ping markers",
+            section = pingSection,
+            position = 0
+    )
+    default boolean pingsEnabled() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "pingHotkey",
+            name = "Ping hotkey",
+            description = "Hold this key and left-click an NPC or tile in the game view to ping it, instead of using the right-click menu",
+            section = pingSection,
+            position = 1
+    )
+    default Keybind pingHotkey() {
+        return new Keybind(KeyEvent.VK_Z, 0);
     }
 
     @ConfigSection(

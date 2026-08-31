@@ -29,6 +29,16 @@ public class RosterState {
         return new ArrayList<>(members.values());
     }
 
+    /** Case-insensitive - matches how {@code MinimapLocationOverlay}/{@code TileHighlightOverlay} already look up a member by their {@code Player} actor's name. */
+    public synchronized RosterMember findByName(String name) {
+        for (RosterMember member : members.values()) {
+            if (member.name.equalsIgnoreCase(name)) {
+                return member;
+            }
+        }
+        return null;
+    }
+
     public synchronized void clear() {
         members.clear();
     }

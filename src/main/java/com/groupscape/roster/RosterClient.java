@@ -27,6 +27,9 @@ public class RosterClient {
     private static final String KILL_EVENT = "kill_event";
     private static final String DROP_EVENT = "drop_event";
     private static final String COLOR_UPDATE = "color_update";
+    private static final String PING_START = "ping_start";
+    private static final String PING_UPDATE = "ping_update";
+    private static final String PING_END = "ping_end";
 
     /** Notified when another group member's kill arrives over the websocket. */
     public interface KillEventListener {
@@ -38,11 +41,24 @@ public class RosterClient {
         void onDropEvent(String memberName, String message);
     }
 
+    /**
+     * Notified as a group member's ping (right-click/hotkey on an NPC or tile) starts, moves
+     * (live NPC tracking - see {@link com.groupscape.roster.PingManager}), or ends. Includes the
+     * local player's own pings too, since the server relays everything it publishes back to every
+     * connected overlay including the sender.
+     */
+    public interface PingEventListener {
+        void onPingStart(RosterWireTypes.PingStartPayload payload);
+        void onPingUpdate(RosterWireTypes.PingUpdatePayload payload);
+        void onPingEnd(RosterWireTypes.PingEndPayload payload);
+    }
+
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
     private final KillEventListener killEventListener;
     private final DropEventListener dropEventListener;
+    private final PingEventListener pingEventListener;
     private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -58,7 +74,8 @@ public class RosterClient {
     private String connectedApiKey;
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
-                         DropEventListener dropEventListener, GroupLinkListener groupLinkListener) {
+                         DropEventListener dropEventListener, PingEventListener pingEventListener,
+                         GroupLinkListener groupLinkListener) {
         // Derived from the shared RuneLite client (never mutate that one - other plugins use it).
         // Without a ping interval, a half-open connection (e.g. the backend disappearing behind a
         // proxy/LB during a rebuild without sending a clean close) never fires onClosed/onFailure,
@@ -70,6 +87,7 @@ public class RosterClient {
         this.rosterState = rosterState;
         this.killEventListener = killEventListener;
         this.dropEventListener = dropEventListener;
+        this.pingEventListener = pingEventListener;
         this.groupLinkListener = groupLinkListener;
     }
 
@@ -189,6 +207,24 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.ColorUpdatePayload.class);
                 if (payload.name != null && payload.color != null) {
                     rosterState.getOrCreate(payload.name).color = payload.color;
+                }
+            } else if (PING_START.equals(envelope.type)) {
+                RosterWireTypes.PingStartPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.PingStartPayload.class);
+                if (payload.pingId != null && payload.memberName != null) {
+                    pingEventListener.onPingStart(payload);
+                }
+            } else if (PING_UPDATE.equals(envelope.type)) {
+                RosterWireTypes.PingUpdatePayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.PingUpdatePayload.class);
+                if (payload.pingId != null) {
+                    pingEventListener.onPingUpdate(payload);
+                }
+            } else if (PING_END.equals(envelope.type)) {
+                RosterWireTypes.PingEndPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.PingEndPayload.class);
+                if (payload.pingId != null) {
+                    pingEventListener.onPingEnd(payload);
                 }
             }
         } catch (Exception e) {

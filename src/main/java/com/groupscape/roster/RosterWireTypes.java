@@ -45,6 +45,28 @@ public class RosterWireTypes {
         public String color;
     }
 
+    public static class PingStartPayload {
+        public String pingId;
+        public String memberName;
+        /** {@code "tile"} or {@code "npc"} - see the server's {@code websocket::PingKind}. */
+        public String kind;
+        public int x;
+        public int y;
+        public int plane;
+        public String npcName;
+    }
+
+    public static class PingUpdatePayload {
+        public String pingId;
+        public int x;
+        public int y;
+        public int plane;
+    }
+
+    public static class PingEndPayload {
+        public String pingId;
+    }
+
     public static class WireVitals {
         public Integer hp;
         public Integer maxHp;

@@ -10,11 +10,18 @@ import com.groupscape.roster.LocalRosterMemberFactory;
 import com.groupscape.roster.MemberMapIcons;
 import com.groupscape.roster.MinimapLocationOverlay;
 import com.groupscape.roster.PartyFrameOverlay;
+import com.groupscape.roster.PingArrowIcons;
+import com.groupscape.roster.PingManager;
+import com.groupscape.roster.PingMinimapOverlay;
+import com.groupscape.roster.PingState;
+import com.groupscape.roster.PingViewportOverlay;
+import com.groupscape.roster.PingWorldMapPoints;
 import com.groupscape.roster.RosterClient;
 import com.groupscape.roster.RosterMember;
 import com.groupscape.roster.RosterNotifier;
 import com.groupscape.roster.RosterState;
 import com.groupscape.roster.TileHighlightOverlay;
+import com.groupscape.roster.WorldMapCoordinates;
 import com.groupscape.sidepanel.LocalGroupSnapshotFactory;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
@@ -111,6 +118,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private MinimapLocationOverlay minimapLocationOverlay;
     private GroupWorldMapPoints groupWorldMapPoints;
     private final MemberMapIcons memberMapIcons = new MemberMapIcons();
+    private PingState pingState;
+    private PingManager pingManager;
+    private PingViewportOverlay pingViewportOverlay;
+    private PingMinimapOverlay pingMinimapOverlay;
+    private PingWorldMapPoints pingWorldMapPoints;
+    private final PingArrowIcons pingArrowIcons = new PingArrowIcons();
     /**
      * The sidepanel's own "you" row, rebuilt on the client thread each
      * {@link #updateThingsThatDoChangeOften} tick and read from the Swing EDT via
@@ -181,7 +194,27 @@ public class GroupScapeTrackerPlugin extends Plugin {
         };
         dataManager.setGroupLinkListener(groupLinkListener);
 
-        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent, groupLinkListener);
+        pingState = new PingState();
+        pingManager = new PingManager(client, httpRequestService);
+        rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent,
+                new RosterClient.PingEventListener() {
+                    @Override
+                    public void onPingStart(com.groupscape.roster.RosterWireTypes.PingStartPayload payload) {
+                        pingState.start(payload);
+                        onGroupPingStart(payload);
+                    }
+
+                    @Override
+                    public void onPingUpdate(com.groupscape.roster.RosterWireTypes.PingUpdatePayload payload) {
+                        pingState.update(payload);
+                    }
+
+                    @Override
+                    public void onPingEnd(com.groupscape.roster.RosterWireTypes.PingEndPayload payload) {
+                        pingState.end(payload);
+                    }
+                },
+                groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
         overlayManager.add(partyFrameOverlay);
@@ -190,6 +223,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
         minimapLocationOverlay = new MinimapLocationOverlay(client, config, rosterState, tooltipManager, memberMapIcons);
         overlayManager.add(minimapLocationOverlay);
         groupWorldMapPoints = new GroupWorldMapPoints(client, config, rosterState, worldMapPointManager, memberMapIcons);
+
+        pingViewportOverlay = new PingViewportOverlay(client, config, pingState, rosterState);
+        overlayManager.add(pingViewportOverlay);
+        pingMinimapOverlay = new PingMinimapOverlay(client, config, pingState, rosterState, tooltipManager, pingArrowIcons);
+        overlayManager.add(pingMinimapOverlay);
+        pingWorldMapPoints = new PingWorldMapPoints(config, pingState, rosterState, worldMapPointManager, pingArrowIcons);
 
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
@@ -220,6 +259,26 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (groupWorldMapPoints != null) {
             groupWorldMapPoints.clear();
             groupWorldMapPoints = null;
+        }
+        if (pingViewportOverlay != null) {
+            overlayManager.remove(pingViewportOverlay);
+            pingViewportOverlay = null;
+        }
+        if (pingMinimapOverlay != null) {
+            overlayManager.remove(pingMinimapOverlay);
+            pingMinimapOverlay = null;
+        }
+        if (pingWorldMapPoints != null) {
+            pingWorldMapPoints.clear();
+            pingWorldMapPoints = null;
+        }
+        if (pingManager != null) {
+            pingManager.shutdown();
+            pingManager = null;
+        }
+        if (pingState != null) {
+            pingState.clear();
+            pingState = null;
         }
         if (rosterClient != null) {
             rosterClient.shutdown();
@@ -391,6 +450,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (groupWorldMapPoints != null) {
             groupWorldMapPoints.sync();
         }
+        if (pingWorldMapPoints != null) {
+            pingWorldMapPoints.sync();
+        }
+        if (pingManager != null) {
+            pingManager.onGameTick(config);
+        }
 
         Widget groupStorageLoaderText = client.getWidget(GROUP_STORAGE_LOADER, 1);
         if (groupStorageLoaderText != null) {
@@ -478,6 +543,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
         } else if (isGameObjectAction(menuAction)) {
             recordObjectInteraction(event);
         }
+
+        handleHotkeyClick(event);
     }
 
     /**
@@ -486,17 +553,160 @@ public class GroupScapeTrackerPlugin extends Plugin {
      */
     @Subscribe
     public void onMenuOpened(MenuOpened event) {
-        if (partyFrameOverlay == null) return;
+        if (partyFrameOverlay != null) {
+            net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+            RosterMember member = partyFrameOverlay.memberAt(mouse.getX(), mouse.getY());
+            if (member != null) {
+                client.createMenuEntry(-1)
+                        .setOption("Copy name")
+                        .setTarget(ColorUtil.wrapWithColorTag(member.name, Color.YELLOW))
+                        .setType(MenuAction.RUNELITE)
+                        .onClick(e -> handleCopyName(member.name));
+            }
+        }
 
-        net.runelite.api.Point mouse = client.getMouseCanvasPosition();
-        RosterMember member = partyFrameOverlay.memberAt(mouse.getX(), mouse.getY());
-        if (member == null) return;
+        addPingMenuEntry(event);
+    }
 
-        client.createMenuEntry(-1)
-                .setOption("Copy name")
-                .setTarget(ColorUtil.wrapWithColorTag(member.name, Color.YELLOW))
-                .setType(MenuAction.RUNELITE)
-                .onClick(e -> handleCopyName(member.name));
+    /**
+     * Adds a "Ping" entry to: an NPC's own right-click menu (viewport), the world map's right-click
+     * menu (via {@link WorldMapCoordinates}, since the world map has no native right-click menu of
+     * its own to piggyback on), or a plain ground tile (viewport) - whichever one applies to this
+     * particular menu, checked in that priority order. Mutually exclusive by construction: a given
+     * right-click is over exactly one of these at a time.
+     */
+    private void addPingMenuEntry(MenuOpened event) {
+        if (!config.pingsEnabled() || pingManager == null) return;
+
+        try {
+            if (pingManager.hasOwnNpcPing()) {
+                client.createMenuEntry(-1)
+                        .setOption("Clear NPC ping")
+                        .setType(MenuAction.RUNELITE)
+                        .onClick(e -> {
+                            log.debug("Ping: 'Clear NPC ping' clicked");
+                            pingManager.clearOwnNpcPing(config);
+                        });
+            }
+            if (pingManager.hasOwnTilePing()) {
+                client.createMenuEntry(-1)
+                        .setOption("Clear tile ping")
+                        .setType(MenuAction.RUNELITE)
+                        .onClick(e -> {
+                            log.debug("Ping: 'Clear tile ping' clicked");
+                            pingManager.clearOwnTilePing(config);
+                        });
+            }
+
+            NPC npc = findMenuNpc(event.getMenuEntries());
+            if (npc != null) {
+                String label = npc.getName() != null ? npc.getName() : "NPC";
+                log.debug("Ping: adding 'Ping' menu entry for NPC {}", label);
+                client.createMenuEntry(-1)
+                        .setOption("Ping")
+                        .setTarget(ColorUtil.wrapWithColorTag(label, Color.CYAN))
+                        .setType(MenuAction.RUNELITE)
+                        .onClick(e -> {
+                            log.debug("Ping: NPC 'Ping' entry clicked for {}", label);
+                            pingManager.startNpcPing(npc, config);
+                        });
+                return;
+            }
+
+            net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+            Widget worldMapWidget = client.getWidget(WorldMapCoordinates.WORLD_MAP_VIEW_WIDGET_ID);
+            if (worldMapWidget != null && !worldMapWidget.isHidden()
+                    && worldMapWidget.getBounds().contains(mouse.getX(), mouse.getY())) {
+                WorldPoint worldMapPoint = WorldMapCoordinates.canvasPointToWorldPoint(client, mouse);
+                if (worldMapPoint != null) {
+                    log.debug("Ping: adding world-map 'Ping' menu entry at {}", worldMapPoint);
+                    client.createMenuEntry(-1)
+                            .setOption("Ping")
+                            .setTarget(ColorUtil.wrapWithColorTag("here", Color.CYAN))
+                            .setType(MenuAction.RUNELITE)
+                            .onClick(e -> pingManager.startTilePing(worldMapPoint, config));
+                } else {
+                    log.debug("Ping: over world-map widget but canvasPointToWorldPoint resolved null");
+                }
+                return;
+            }
+
+            Tile tile = client.getSelectedSceneTile();
+            WorldPoint tileWorldPoint = tile != null ? tile.getWorldLocation() : null;
+            if (tileWorldPoint != null) {
+                log.debug("Ping: adding tile 'Ping' menu entry at {}", tileWorldPoint);
+                client.createMenuEntry(-1)
+                        .setOption("Ping")
+                        .setTarget(ColorUtil.wrapWithColorTag("here", Color.CYAN))
+                        .setType(MenuAction.RUNELITE)
+                        .onClick(e -> pingManager.startTilePing(tileWorldPoint, config));
+            } else {
+                log.debug("Ping: no NPC/world-map/tile target found for this menu (tile={})", tile);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to add ping menu entry", e);
+        }
+    }
+
+    private NPC findMenuNpc(MenuEntry[] entries) {
+        if (entries == null) return null;
+        for (MenuEntry entry : entries) {
+            if (entry.getNpc() != null) {
+                return entry.getNpc();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Hold-{@link GroupScapeTrackerConfig#pingHotkey()}-and-left-click shortcut for the viewport
+     * only (see {@link #addPingMenuEntry} for the right-click menu path, which also covers the
+     * world map). Pings the NPC under the cursor if there is one, else the ground tile, and
+     * consumes the click so it doesn't also walk/attack.
+     *
+     * <p>Two earlier approaches to "consume the click" both failed live testing: tracking hold
+     * state via a {@link net.runelite.client.util.HotkeyListener} went stale the instant a click
+     * stole canvas focus (a synthetic key-released fired before this ran), and even after fixing
+     * that with {@link Client#isKeyPressed}, intercepting the raw AWT {@code MouseEvent} via a
+     * {@link net.runelite.client.input.MouseListener} never actually suppressed the walk/attack -
+     * that path isn't what drives the game's own click-to-act handling. RuneLite's own bundled
+     * Party plugin pings by consuming {@link MenuOptionClicked} instead (verified by decompiling
+     * {@code net.runelite.client.plugins.party.PartyPlugin}), which fires after the game has
+     * already resolved the click into one concrete action - consuming it there reliably cancels
+     * that action. This mirrors that approach instead of re-deriving what's under the cursor from
+     * raw pixel coordinates.
+     */
+    private void handleHotkeyClick(MenuOptionClicked event) {
+        if (!config.pingsEnabled() || pingManager == null || client.isMenuOpen()
+                || !client.isKeyPressed(config.pingHotkey().getKeyCode())) {
+            return;
+        }
+
+        NPC npc = event.getMenuEntry().getNpc();
+        if (npc != null) {
+            log.debug("Ping: hotkey click hit NPC {}", npc.getName());
+            event.consume();
+            pingManager.startNpcPing(npc, config);
+            return;
+        }
+
+        if (!"walk here".equalsIgnoreCase(event.getMenuOption())) {
+            return;
+        }
+        Tile tile = client.getSelectedSceneTile();
+        WorldPoint tileWorldPoint = tile != null ? tile.getWorldLocation() : null;
+        if (tileWorldPoint != null) {
+            log.debug("Ping: hotkey click hit tile {}", tileWorldPoint);
+            event.consume();
+            pingManager.startTilePing(tileWorldPoint, config);
+        }
+    }
+
+    /** Called by {@link RosterClient} when any group member's ping (including the local player's
+     * own) starts - posts the chat line the ping spec calls for, regardless of who pinged. */
+    private void onGroupPingStart(com.groupscape.roster.RosterWireTypes.PingStartPayload payload) {
+        String where = payload.npcName != null ? payload.npcName : "(" + payload.x + ", " + payload.y + ")";
+        sendChatMessage(payload.memberName + " pinged " + where);
     }
 
     private void handleCopyName(String name) {
@@ -639,6 +849,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     @Subscribe
     public void onNpcDespawned(NpcDespawned event) {
+        if (pingManager != null) {
+            pingManager.onNpcDespawned(event.getNpc(), config);
+        }
+
         if (doNotUseThisData()) return;
 
         NPC npc = event.getNpc();
