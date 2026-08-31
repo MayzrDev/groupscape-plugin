@@ -6,6 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
+import net.runelite.api.NPC;
+import net.runelite.api.NPCComposition;
 import net.runelite.api.Player;
 import net.runelite.api.Prayer;
 import net.runelite.api.Skill;
@@ -55,8 +57,20 @@ public final class LocalRosterMemberFactory {
         Actor interacting = player.getInteracting();
         if (interacting != null && interacting.getName() != null) {
             self.targetName = interacting.getName();
-            self.targetHealthScale = interacting.getHealthScale();
-            self.targetHealthRatio = interacting.getHealthRatio();
+
+            // Non-combat NPCs (bankers, quest givers, Tool Leprechauns, etc.) can still flash a
+            // stale/default healthbar ratio from RuneLite for a tick even though they're not
+            // actually fightable - combat level isn't reliable here since some non-attackable
+            // NPCs still report one. Whether "Attack" is actually a menu option is the signal
+            // that can't fluctuate tick to tick.
+            boolean combatCapable = !(interacting instanceof NPC) || isAttackable((NPC) interacting);
+            if (combatCapable) {
+                self.targetHealthScale = interacting.getHealthScale();
+                self.targetHealthRatio = interacting.getHealthRatio();
+            } else {
+                self.targetHealthScale = 0;
+                self.targetHealthRatio = -1;
+            }
             return;
         }
 
@@ -81,6 +95,15 @@ public final class LocalRosterMemberFactory {
         self.targetName = null;
         self.targetHealthScale = null;
         self.targetHealthRatio = null;
+    }
+
+    private static boolean isAttackable(NPC npc) {
+        NPCComposition comp = npc.getTransformedComposition();
+        if (comp == null) return false;
+        for (String action : comp.getActions()) {
+            if ("Attack".equalsIgnoreCase(action)) return true;
+        }
+        return false;
     }
 
     private static List<String> activePrayerNames(Client client) {

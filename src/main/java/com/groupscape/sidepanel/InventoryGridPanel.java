@@ -14,13 +14,13 @@ import net.runelite.client.game.ItemManager;
 class InventoryGridPanel extends JPanel {
     private static final int COLUMNS = 4;
     private static final int SLOT_COUNT = 28;
-    private static final Dimension SLOT_SIZE = new Dimension(40, 34);
+    private static final Dimension SLOT_SIZE = new Dimension(36, 30);
 
     private final ItemSlotComponent[] slots = new ItemSlotComponent[SLOT_COUNT];
     private List<Integer> lastRendered = null;
 
     InventoryGridPanel(ItemManager itemManager, ClientThread clientThread) {
-        setLayout(new GridLayout(SLOT_COUNT / COLUMNS, COLUMNS, 2, 2));
+        setLayout(new GridLayout(SLOT_COUNT / COLUMNS, COLUMNS, 1, 1));
         setBackground(SidePanelTheme.SLOT_BG);
         setBorder(new LineBorder(SidePanelTheme.BORDER, 1));
 
@@ -28,7 +28,7 @@ class InventoryGridPanel extends JPanel {
             ItemSlotComponent slot = new ItemSlotComponent(itemManager, clientThread);
             slot.setPreferredSize(SLOT_SIZE);
             slot.setBackground(new Color(255, 255, 255, 8));
-            slot.setIconScale(0.575);
+            slot.setIconScale(0.72);
             slots[i] = slot;
             add(slot);
         }

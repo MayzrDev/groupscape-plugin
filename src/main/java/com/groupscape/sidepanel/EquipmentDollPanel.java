@@ -17,6 +17,10 @@ import net.runelite.client.game.ItemManager;
  * sidepanel's actual ~170px content width - {@code CardLayout} reports its preferred size as the
  * max across every card it holds, not just the visible one, so a wider-than-necessary doll here
  * was forcing every tab (not just Gear) wider than the sidepanel.
+ *
+ * <p>Sized and positioned at a fixed pixel scale rather than responsively - {@link
+ * EquipmentTabPanel} is responsible for centering this within whatever width is actually
+ * available, via a {@code FlowLayout} wrapper rather than this panel guessing at its own bounds.
  */
 class EquipmentDollPanel extends JPanel {
     private static final int SLOT_SIZE = 28;
@@ -44,6 +48,7 @@ class EquipmentDollPanel extends JPanel {
         addSlot(EquipmentInventorySlot.BOOTS, 70, 144);
         addSlot(EquipmentInventorySlot.RING, 138, 144);
         setPreferredSize(new Dimension(170, 176));
+        setMinimumSize(new Dimension(170, 176));
     }
 
     private void addSlot(EquipmentInventorySlot slot, int x, int y) {

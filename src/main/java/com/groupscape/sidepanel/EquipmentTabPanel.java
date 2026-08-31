@@ -1,5 +1,7 @@
 package com.groupscape.sidepanel;
 
+import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.util.List;
 import javax.swing.BoxLayout;
 import javax.swing.JPanel;
@@ -18,7 +20,16 @@ class EquipmentTabPanel extends JPanel {
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setOpaque(false);
 
-        add(dollPanel);
+        // FlowLayout centers a fixed-size child within whatever width it's actually given -
+        // BoxLayout's own cross-axis alignmentX centering doesn't reliably kick in here since the
+        // doll sits behind a CardLayout that resizes its visible card to fill the container
+        // outright rather than respecting the card's reported max size.
+        JPanel dollWrapper = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        dollWrapper.setOpaque(false);
+        dollWrapper.setAlignmentX(LEFT_ALIGNMENT);
+        dollWrapper.setMaximumSize(new Dimension(Integer.MAX_VALUE, dollPanel.getPreferredSize().height));
+        dollWrapper.add(dollPanel);
+        add(dollWrapper);
         add(bonusesPanel);
     }
 

@@ -6,8 +6,17 @@ import java.util.List;
 
 /** Mutable per-member vitals snapshot the overlay renders from. */
 public class RosterMember {
-    /** Shared by {@code PartyFrameOverlay} and {@code RosterNotifier} so both agree on "offline". */
-    public static final long OFFLINE_THRESHOLD_MS = 30_000;
+    /**
+     * Shared by {@code PartyFrameOverlay}, {@code RosterListPanel}, {@code MinimapLocationOverlay},
+     * {@code GroupWorldMapPoints}, and {@code RosterNotifier} so they all agree on "offline".
+     *
+     * <p>Must stay comfortably above {@code DataManager.HEARTBEAT_INTERVAL_MILLIS} (30s) - a
+     * member's idle heartbeat lands roughly every 30-31s (1s poll granularity) plus whatever
+     * network latency, so a threshold equal to the interval left no margin: any jitter tipped an
+     * online member into "offline" for a chunk of every cycle. 60s matches the margin the web
+     * app's own online badge already uses ({@code admin_account_is_online_column} in db.rs).
+     */
+    public static final long OFFLINE_THRESHOLD_MS = 60_000;
 
     public final String name;
     public String color = "#808080";

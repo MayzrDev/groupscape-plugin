@@ -28,6 +28,17 @@ public class DataManager {
     private int skipNextNAttempts = 0;
     private GroupLinkListener groupLinkListener;
 
+    /**
+     * Forces a heartbeat-only POST (just the player name, no changed fields) at least this often
+     * even when nothing tracked has changed. Without this, a fully idle/AFK player (no
+     * inventory/position/stat changes) never sends anything at all, so the server's
+     * last-seen timestamp for them goes stale and they read as offline until something finally
+     * changes - which can mean indefinitely, until the player restarts and the plugin's
+     * previous-state caches reset to null, forcing every field to look "changed" again.
+     */
+    private static final long HEARTBEAT_INTERVAL_MILLIS = 30_000;
+    private long lastSentAtMillis = 0;
+
     /** Called once from plugin startup; not constructor-injected since Guice owns this singleton. */
     public void setGroupLinkListener(GroupLinkListener groupLinkListener) {
         this.groupLinkListener = groupLinkListener;
@@ -85,7 +96,6 @@ public class DataManager {
     private final NotableDropEvents notableDropEvents = new NotableDropEvents();
 
     public void submitToApi() {
-        if (config.pauseSync()) return;
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
         if (skipNextNAttempts-- > 0) return;
 
@@ -124,10 +134,14 @@ public class DataManager {
             alertEvents.consumeState(updates);
             notableDropEvents.consumeState(updates);
 
-            if (updates.size() > 1) {
+            boolean hasChanges = updates.size() > 1;
+            boolean heartbeatDue = System.currentTimeMillis() - lastSentAtMillis >= HEARTBEAT_INTERVAL_MILLIS;
+            if (hasChanges || heartbeatDue) {
+                lastSentAtMillis = System.currentTimeMillis();
                 HttpRequestService.HttpResponse response = httpRequestService.post(url, apiKey, updates);
 
                 if (!response.isSuccessful()) {
+                    log.warn("Telemetry POST failed ({}): {} {}", updates.size() - 1, response.getCode(), response.getBody());
                     skipNextNAttempts = 10;
                     restoreStateIfNothingUpdated();
                     if (response.getCode() == 403 && groupLinkListener != null) {
@@ -146,7 +160,6 @@ public class DataManager {
     }
 
     public void uploadPortrait(byte[] mesh) {
-        if (config.pauseSync()) return;
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
 
         String playerName = client.getLocalPlayer().getName();

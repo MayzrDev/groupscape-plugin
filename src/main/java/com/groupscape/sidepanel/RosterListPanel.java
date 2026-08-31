@@ -16,6 +16,7 @@ import java.util.Set;
 import javax.swing.BoxLayout;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.Scrollable;
 import net.runelite.api.Client;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
@@ -28,7 +29,7 @@ import net.runelite.client.ui.FontManager;
  * {@link #refresh} call rather than rebuilt from scratch so a member's collapsed/tab state
  * survives a vitals tick.
  */
-public class RosterListPanel extends JPanel {
+public class RosterListPanel extends JPanel implements Scrollable {
     private final Client client;
     private final GroupScapeTrackerConfig config;
     private final ItemManager itemManager;
@@ -171,6 +172,39 @@ public class RosterListPanel extends JPanel {
         Set<String> names = new HashSet<>();
         for (RosterMember member : members) names.add(member.name);
         return names;
+    }
+
+    /**
+     * Without this, the {@code JScrollPane} lays this panel out at its own preferred width
+     * instead of the viewport's - if the cards' intrinsic content width (icons, digit widths,
+     * fixed borders summed up) comes out even a couple pixels wider than the actual panel, it
+     * gets silently clipped on the right since horizontal scrolling is disabled, leaving the
+     * right-side padding thinner than the left instead of mirroring it. This also keeps the
+     * width correct if a vertical scrollbar appears later and narrows the viewport.
+     */
+    @Override
+    public boolean getScrollableTracksViewportWidth() {
+        return true;
+    }
+
+    @Override
+    public boolean getScrollableTracksViewportHeight() {
+        return false;
+    }
+
+    @Override
+    public Dimension getPreferredScrollableViewportSize() {
+        return getPreferredSize();
+    }
+
+    @Override
+    public int getScrollableUnitIncrement(java.awt.Rectangle visibleRect, int orientation, int direction) {
+        return 16;
+    }
+
+    @Override
+    public int getScrollableBlockIncrement(java.awt.Rectangle visibleRect, int orientation, int direction) {
+        return orientation == javax.swing.SwingConstants.VERTICAL ? visibleRect.height : visibleRect.width;
     }
 
     private static JPanel spacer() {

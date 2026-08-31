@@ -37,7 +37,7 @@ class SkillsGridPanel extends JPanel {
             Skill skill = SkillOrder.GRID_ORDER[i];
             JPanel box = new JPanel(new BorderLayout(4, 0));
             box.setOpaque(false);
-            box.setBorder(new EmptyBorder(3, 6, 3, 6));
+            box.setBorder(new EmptyBorder(1, 6, 1, 6));
 
             JLabel icon = new JLabel();
             java.awt.image.BufferedImage sprite = skillIconManager.getSkillImage(skill, true);

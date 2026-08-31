@@ -499,23 +499,6 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigSection(
-            name = "Sync",
-            description = "Controls for sending your data to the server",
-            position = 5
-    )
-    String syncSection = "SyncSection";
-
-    @ConfigItem(
-            keyName = "pauseSync",
-            name = "Pause sync",
-            description = "Stop sending your data to the server without disabling the plugin",
-            section = syncSection
-    )
-    default boolean pauseSync() {
-        return false;
-    }
-
-    @ConfigSection(
             name = "Notifications",
             description = "Chat notifications for group events",
             position = 6

@@ -118,6 +118,7 @@ public class RosterClient {
         webSocket = okHttpClient.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(WebSocket webSocket, Response response) {
+                log.info("Party overlay WebSocket connected (accountHash={})", accountHash);
                 groupLinkListener.onLinked();
             }
 
@@ -128,12 +129,14 @@ public class RosterClient {
 
             @Override
             public void onClosed(WebSocket webSocket, int code, String reason) {
+                log.info("Party overlay WebSocket closed (accountHash={}, code={}, reason={})", accountHash, code, reason);
                 scheduleReconnect(baseUrl, accountHash, apiKey);
             }
 
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, Response response) {
-                log.debug("Party overlay WebSocket failure: {}", t.toString());
+                log.warn("Party overlay WebSocket failure (accountHash={}, httpStatus={}): {}",
+                        accountHash, response != null ? response.code() : "n/a", t.toString());
                 if (response != null && response.code() == 403) {
                     groupLinkListener.onLinkRequired();
                 }
@@ -195,11 +198,13 @@ public class RosterClient {
 
     private synchronized void scheduleReconnect(String baseUrl, String accountHash, String apiKey) {
         if (intentionallyClosed) return;
+        log.info("Party overlay WebSocket reconnect scheduled in {}s (accountHash={})", RECONNECT_DELAY_SECONDS, accountHash);
         reconnectExecutor.schedule(() -> {
             synchronized (this) {
                 if (!intentionallyClosed
                         && accountHash.equals(connectedAccountHash)
                         && apiKey.equals(connectedApiKey)) {
+                    log.info("Party overlay WebSocket reconnecting (accountHash={})", accountHash);
                     openSocket(baseUrl, accountHash, apiKey);
                 }
             }

@@ -61,7 +61,7 @@ class EquipmentBonusesPanel extends JPanel {
 
         setLayout(new javax.swing.BoxLayout(this, javax.swing.BoxLayout.Y_AXIS));
         setBackground(SidePanelTheme.SLOT_BG);
-        setBorder(new CompoundBorder(new LineBorder(SidePanelTheme.BORDER, 1), new EmptyBorder(6, 8, 6, 8)));
+        setBorder(new CompoundBorder(new LineBorder(SidePanelTheme.BORDER, 1), new EmptyBorder(6, 6, 6, 6)));
 
         add(heading("Attack bonus"));
         add(grid(
@@ -94,7 +94,7 @@ class EquipmentBonusesPanel extends JPanel {
     }
 
     private JPanel grid(Object... labelValuePairs) {
-        JPanel panel = new JPanel(new GridLayout(labelValuePairs.length / 2, 2, 8, 1));
+        JPanel panel = new JPanel(new GridLayout(labelValuePairs.length / 2, 2, 4, 1));
         panel.setOpaque(false);
         panel.setAlignmentX(LEFT_ALIGNMENT);
         for (int i = 0; i < labelValuePairs.length; i += 2) {
