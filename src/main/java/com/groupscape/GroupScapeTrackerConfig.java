@@ -1,11 +1,9 @@
 package com.groupscape;
 
-import java.awt.event.KeyEvent;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
-import net.runelite.client.config.Keybind;
 import net.runelite.client.config.Range;
 
 @ConfigGroup("GroupScapeTracker")
@@ -357,17 +355,6 @@ public interface GroupScapeTrackerConfig extends Config {
         return true;
     }
 
-    @ConfigItem(
-            keyName = "pingHotkey",
-            name = "Ping hotkey",
-            description = "Hold this key and left-click an NPC or tile in the game view to ping it, instead of using the right-click menu",
-            section = pingSection,
-            position = 1
-    )
-    default Keybind pingHotkey() {
-        return new Keybind(KeyEvent.VK_Z, 0);
-    }
-
     @ConfigSection(
             name = "Raid Markers",
             description = "Drop persistent raid callout markers (Danger/Defend/Loot/Focus, or a 1-4/A-D ping) on a tile or NPC for your group to see",
@@ -387,17 +374,17 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigSection(
-            name = "Raid Marker Types: Standard",
-            description = "Toggle which standard raid marker types appear in your own \"Raid Markers\" menu - unchecking a type only removes it from your menu, it doesn't hide other members' markers of that type",
+            name = "Raid Marker Types",
+            description = "Toggle which raid marker types appear in your own \"Raid Markers\" menu - unchecking a type only removes it from your menu, it doesn't hide other members' markers of that type",
             position = 9
     )
-    String raidMarkerStandardSection = "RaidMarkerStandardSection";
+    String raidMarkerTypesSection = "RaidMarkerTypesSection";
 
     @ConfigItem(
             keyName = "showMenuDanger",
             name = "Danger",
             description = "Show \"Danger\" in your Raid Markers menu",
-            section = raidMarkerStandardSection,
+            section = raidMarkerTypesSection,
             position = 0
     )
     default boolean showMenuDanger() {
@@ -408,7 +395,7 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuDefend",
             name = "Defend",
             description = "Show \"Defend\" in your Raid Markers menu",
-            section = raidMarkerStandardSection,
+            section = raidMarkerTypesSection,
             position = 1
     )
     default boolean showMenuDefend() {
@@ -419,7 +406,7 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuLoot",
             name = "Loot",
             description = "Show \"Loot\" in your Raid Markers menu",
-            section = raidMarkerStandardSection,
+            section = raidMarkerTypesSection,
             position = 2
     )
     default boolean showMenuLoot() {
@@ -430,26 +417,19 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuFocus",
             name = "Focus / Kill Target",
             description = "Show \"Focus / Kill Target\" in your Raid Markers menu",
-            section = raidMarkerStandardSection,
+            section = raidMarkerTypesSection,
             position = 3
     )
     default boolean showMenuFocus() {
         return true;
     }
 
-    @ConfigSection(
-            name = "Raid Marker Types: Numbers",
-            description = "Toggle which numbered raid pings (1-4) appear in your own \"Raid Markers\" menu - unchecking a type only removes it from your menu, it doesn't hide other members' pings of that type",
-            position = 10
-    )
-    String raidMarkerNumbersSection = "RaidMarkerNumbersSection";
-
     @ConfigItem(
             keyName = "showMenuOne",
             name = "1",
             description = "Show \"1\" in your Raid Markers menu",
-            section = raidMarkerNumbersSection,
-            position = 0
+            section = raidMarkerTypesSection,
+            position = 4
     )
     default boolean showMenuOne() {
         return true;
@@ -459,8 +439,8 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuTwo",
             name = "2",
             description = "Show \"2\" in your Raid Markers menu",
-            section = raidMarkerNumbersSection,
-            position = 1
+            section = raidMarkerTypesSection,
+            position = 5
     )
     default boolean showMenuTwo() {
         return true;
@@ -470,8 +450,8 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuThree",
             name = "3",
             description = "Show \"3\" in your Raid Markers menu",
-            section = raidMarkerNumbersSection,
-            position = 2
+            section = raidMarkerTypesSection,
+            position = 6
     )
     default boolean showMenuThree() {
         return true;
@@ -481,26 +461,19 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuFour",
             name = "4",
             description = "Show \"4\" in your Raid Markers menu",
-            section = raidMarkerNumbersSection,
-            position = 3
+            section = raidMarkerTypesSection,
+            position = 7
     )
     default boolean showMenuFour() {
         return true;
     }
 
-    @ConfigSection(
-            name = "Raid Marker Types: Letters",
-            description = "Toggle which lettered raid pings (A-D) appear in your own \"Raid Markers\" menu - unchecking a type only removes it from your menu, it doesn't hide other members' pings of that type",
-            position = 11
-    )
-    String raidMarkerLettersSection = "RaidMarkerLettersSection";
-
     @ConfigItem(
             keyName = "showMenuA",
             name = "A",
             description = "Show \"A\" in your Raid Markers menu",
-            section = raidMarkerLettersSection,
-            position = 0
+            section = raidMarkerTypesSection,
+            position = 8
     )
     default boolean showMenuA() {
         return true;
@@ -510,8 +483,8 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuB",
             name = "B",
             description = "Show \"B\" in your Raid Markers menu",
-            section = raidMarkerLettersSection,
-            position = 1
+            section = raidMarkerTypesSection,
+            position = 9
     )
     default boolean showMenuB() {
         return true;
@@ -521,8 +494,8 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuC",
             name = "C",
             description = "Show \"C\" in your Raid Markers menu",
-            section = raidMarkerLettersSection,
-            position = 2
+            section = raidMarkerTypesSection,
+            position = 10
     )
     default boolean showMenuC() {
         return true;
@@ -532,8 +505,8 @@ public interface GroupScapeTrackerConfig extends Config {
             keyName = "showMenuD",
             name = "D",
             description = "Show \"D\" in your Raid Markers menu",
-            section = raidMarkerLettersSection,
-            position = 3
+            section = raidMarkerTypesSection,
+            position = 11
     )
     default boolean showMenuD() {
         return true;

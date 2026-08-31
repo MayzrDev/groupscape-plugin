@@ -63,6 +63,7 @@ import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 import java.awt.Color;
 import java.awt.Toolkit;
+import java.awt.event.KeyEvent;
 import java.awt.datatransfer.StringSelection;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -621,8 +622,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
         } else if (isGameObjectAction(menuAction)) {
             recordObjectInteraction(event);
         }
-
-        handleHotkeyClick(event);
     }
 
     /**
@@ -652,10 +651,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * menu (via {@link WorldMapCoordinates}, since the world map has no native right-click menu of
      * its own to piggyback on), or a plain ground tile (viewport) - whichever one applies to this
      * particular menu, checked in that priority order. Mutually exclusive by construction: a given
-     * right-click is over exactly one of these at a time.
+     * right-click is over exactly one of these at a time. Only shown on shift-right-click, so a
+     * plain right-click's menu stays uncluttered.
      */
     private void addPingMenuEntry(MenuOpened event) {
-        if (!config.pingsEnabled() || pingManager == null) return;
+        if (!config.pingsEnabled() || pingManager == null || !isShiftHeld()) return;
 
         try {
             if (pingManager.hasOwnNpcPing()) {
@@ -727,6 +727,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
     }
 
+    private boolean isShiftHeld() {
+        return client.isKeyPressed(KeyEvent.VK_SHIFT);
+    }
+
     private NPC findMenuNpc(MenuEntry[] entries) {
         if (entries == null) return null;
         for (MenuEntry entry : entries) {
@@ -741,10 +745,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * Adds a "Raid Markers" submenu (one child entry per {@link RaidMarkerType}) to whichever
      * target applies to this menu - same NPC/world-map-widget/scene-tile priority order as
      * {@link #addPingMenuEntry} - plus a single "Clear my raid markers here" entry if the local
-     * player already has any marker active on that exact target.
+     * player already has any marker active on that exact target. Only shown on shift-right-click,
+     * so a plain right-click's menu stays uncluttered.
      */
     private void addRaidMarkerMenuEntries(MenuOpened event) {
-        if (!config.raidMarkersEnabled() || raidMarkerManager == null) return;
+        if (!config.raidMarkersEnabled() || raidMarkerManager == null || !isShiftHeld()) return;
 
         try {
             NPC npc = findMenuNpc(event.getMenuEntries());
@@ -841,50 +846,6 @@ public class GroupScapeTrackerPlugin extends Plugin {
             case C: return config.showMenuC();
             case D: return config.showMenuD();
             default: return true;
-        }
-    }
-
-    /**
-     * Hold-{@link GroupScapeTrackerConfig#pingHotkey()}-and-left-click shortcut for the viewport
-     * only (see {@link #addPingMenuEntry} for the right-click menu path, which also covers the
-     * world map). Pings the NPC under the cursor if there is one, else the ground tile, and
-     * consumes the click so it doesn't also walk/attack.
-     *
-     * <p>Two earlier approaches to "consume the click" both failed live testing: tracking hold
-     * state via a {@link net.runelite.client.util.HotkeyListener} went stale the instant a click
-     * stole canvas focus (a synthetic key-released fired before this ran), and even after fixing
-     * that with {@link Client#isKeyPressed}, intercepting the raw AWT {@code MouseEvent} via a
-     * {@link net.runelite.client.input.MouseListener} never actually suppressed the walk/attack -
-     * that path isn't what drives the game's own click-to-act handling. RuneLite's own bundled
-     * Party plugin pings by consuming {@link MenuOptionClicked} instead (verified by decompiling
-     * {@code net.runelite.client.plugins.party.PartyPlugin}), which fires after the game has
-     * already resolved the click into one concrete action - consuming it there reliably cancels
-     * that action. This mirrors that approach instead of re-deriving what's under the cursor from
-     * raw pixel coordinates.
-     */
-    private void handleHotkeyClick(MenuOptionClicked event) {
-        if (!config.pingsEnabled() || pingManager == null || client.isMenuOpen()
-                || !client.isKeyPressed(config.pingHotkey().getKeyCode())) {
-            return;
-        }
-
-        NPC npc = event.getMenuEntry().getNpc();
-        if (npc != null) {
-            log.debug("Ping: hotkey click hit NPC {}", npc.getName());
-            event.consume();
-            pingManager.startNpcPing(npc, config);
-            return;
-        }
-
-        if (!"walk here".equalsIgnoreCase(event.getMenuOption())) {
-            return;
-        }
-        Tile tile = client.getSelectedSceneTile();
-        WorldPoint tileWorldPoint = tile != null ? tile.getWorldLocation() : null;
-        if (tileWorldPoint != null) {
-            log.debug("Ping: hotkey click hit tile {}", tileWorldPoint);
-            event.consume();
-            pingManager.startTilePing(tileWorldPoint, config);
         }
     }
 
