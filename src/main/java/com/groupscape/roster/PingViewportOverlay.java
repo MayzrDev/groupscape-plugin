@@ -19,8 +19,9 @@ import net.runelite.client.ui.overlay.OverlayPriority;
 /**
  * Draws every active ping visible in the local player's game scene: both a tile ping and an NPC
  * ping outline the ground tile itself (not the NPC's 3D model hull - a moving NPC's hull is a
- * poor match for "the tile RuneLite says it's on" a tick later anyway), a tile ping also gets a
- * vertical beam, and an NPC ping gets an arrow floating at a fixed height above the tile.
+ * poor match for "the tile RuneLite says it's on" a tick later anyway); a tile ping also gets a
+ * solid connector line up to its arrow, plus a gradient beam column (see {@link BeamRenderer}),
+ * and an NPC ping gets an arrow floating at a fixed height above the tile with no beam.
  */
 public class PingViewportOverlay extends Overlay {
     private static final int BEAM_HEIGHT = 140;
@@ -57,7 +58,14 @@ public class PingViewportOverlay extends Overlay {
             Color color = colorFor(ping.memberName);
             drawTileOutline(graphics, localPoint, color);
 
-            if (PingState.KIND_NPC.equals(ping.kind)) {
+            boolean isNpc = PingState.KIND_NPC.equals(ping.kind);
+            if (!isNpc) {
+                Point top = Perspective.localToCanvas(client, localPoint, client.getPlane(), BEAM_HEIGHT);
+                Point bottom = Perspective.localToCanvas(client, localPoint, client.getPlane(), 0);
+                BeamRenderer.draw(graphics, top, bottom, color);
+            }
+
+            if (isNpc) {
                 drawArrowAt(graphics, localPoint, NPC_ARROW_HEIGHT, color);
             } else {
                 drawBeamAndArrow(graphics, localPoint, BEAM_HEIGHT, color);

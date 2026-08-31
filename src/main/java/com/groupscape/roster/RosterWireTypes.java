@@ -67,6 +67,30 @@ public class RosterWireTypes {
         public String pingId;
     }
 
+    public static class RaidMarkerStartPayload {
+        public String markerId;
+        public String memberName;
+        /** e.g. {@code "danger"}, {@code "defend"}, {@code "loot"}, {@code "focus"}, {@code "one"}..{@code "four"}, {@code "a"}..{@code "d"} - see the server's {@code websocket::MarkerType}. */
+        public String markerType;
+        /** {@code "tile"} or {@code "npc"} - see the server's {@code websocket::PingKind}. */
+        public String kind;
+        public int x;
+        public int y;
+        public int plane;
+        public String npcName;
+    }
+
+    public static class RaidMarkerUpdatePayload {
+        public String markerId;
+        public int x;
+        public int y;
+        public int plane;
+    }
+
+    public static class RaidMarkerEndPayload {
+        public String markerId;
+    }
+
     public static class WireVitals {
         public Integer hp;
         public Integer maxHp;

@@ -16,6 +16,13 @@ import com.groupscape.roster.PingMinimapOverlay;
 import com.groupscape.roster.PingState;
 import com.groupscape.roster.PingViewportOverlay;
 import com.groupscape.roster.PingWorldMapPoints;
+import com.groupscape.roster.RaidMarkerIcons;
+import com.groupscape.roster.RaidMarkerManager;
+import com.groupscape.roster.RaidMarkerMinimapOverlay;
+import com.groupscape.roster.RaidMarkerState;
+import com.groupscape.roster.RaidMarkerType;
+import com.groupscape.roster.RaidMarkerViewportOverlay;
+import com.groupscape.roster.RaidMarkerWorldMapPoints;
 import com.groupscape.roster.RosterClient;
 import com.groupscape.roster.RosterMember;
 import com.groupscape.roster.RosterNotifier;
@@ -124,6 +131,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private PingMinimapOverlay pingMinimapOverlay;
     private PingWorldMapPoints pingWorldMapPoints;
     private final PingArrowIcons pingArrowIcons = new PingArrowIcons();
+    private RaidMarkerState raidMarkerState;
+    private RaidMarkerManager raidMarkerManager;
+    private RaidMarkerViewportOverlay raidMarkerViewportOverlay;
+    private RaidMarkerMinimapOverlay raidMarkerMinimapOverlay;
+    private RaidMarkerWorldMapPoints raidMarkerWorldMapPoints;
+    private final RaidMarkerIcons raidMarkerIcons = new RaidMarkerIcons();
     /**
      * The sidepanel's own "you" row, rebuilt on the client thread each
      * {@link #updateThingsThatDoChangeOften} tick and read from the Swing EDT via
@@ -148,6 +161,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@code null}. Trimmed on despawn so this doesn't grow unbounded.
      */
     private final Map<Integer, String> npcNamesByIndex = new HashMap<>();
+    /**
+     * NPC index -> last-known non-negative health ratio, refreshed on every hitsplat. The health
+     * bar (and so {@code npc.getHealthRatio()}) frequently reverts to -1 before
+     * {@link NpcDespawned} actually fires - e.g. a boss's death animation outlasting the health
+     * bar's own hide timer - which made the live ratio check at despawn miss most boss kills.
+     * Recording the ratio as damage lands lets despawn fall back to "did this NPC ever hit 0"
+     * instead of "is it at 0 right now". Trimmed on despawn so this doesn't grow unbounded.
+     */
+    private final Map<Integer, Integer> npcHealthRatioByIndex = new HashMap<>();
     private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
     private static final double LOW_HP_REARM_THRESHOLD = 0.5;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
@@ -196,6 +218,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         pingState = new PingState();
         pingManager = new PingManager(client, httpRequestService);
+        raidMarkerState = new RaidMarkerState();
+        raidMarkerManager = new RaidMarkerManager(client, httpRequestService);
         rosterClient = new RosterClient(okHttpClient, gson, rosterState, this::onGroupKillEvent, this::onGroupDropEvent,
                 new RosterClient.PingEventListener() {
                     @Override
@@ -214,6 +238,22 @@ public class GroupScapeTrackerPlugin extends Plugin {
                         pingState.end(payload);
                     }
                 },
+                new RosterClient.RaidMarkerEventListener() {
+                    @Override
+                    public void onMarkerStart(com.groupscape.roster.RosterWireTypes.RaidMarkerStartPayload payload) {
+                        raidMarkerState.start(payload);
+                    }
+
+                    @Override
+                    public void onMarkerUpdate(com.groupscape.roster.RosterWireTypes.RaidMarkerUpdatePayload payload) {
+                        raidMarkerState.update(payload);
+                    }
+
+                    @Override
+                    public void onMarkerEnd(com.groupscape.roster.RosterWireTypes.RaidMarkerEndPayload payload) {
+                        raidMarkerState.end(payload);
+                    }
+                },
                 groupLinkListener);
         rosterNotifier = new RosterNotifier();
         partyFrameOverlay = new PartyFrameOverlay(client, config, rosterState, dataManager.getNpcDialogueTracker(), spriteManager);
@@ -229,6 +269,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
         pingMinimapOverlay = new PingMinimapOverlay(client, config, pingState, rosterState, tooltipManager, pingArrowIcons);
         overlayManager.add(pingMinimapOverlay);
         pingWorldMapPoints = new PingWorldMapPoints(config, pingState, rosterState, worldMapPointManager, pingArrowIcons);
+
+        raidMarkerViewportOverlay = new RaidMarkerViewportOverlay(client, config, raidMarkerState, raidMarkerIcons);
+        overlayManager.add(raidMarkerViewportOverlay);
+        raidMarkerMinimapOverlay = new RaidMarkerMinimapOverlay(client, config, raidMarkerState, tooltipManager, raidMarkerIcons);
+        overlayManager.add(raidMarkerMinimapOverlay);
+        raidMarkerWorldMapPoints = new RaidMarkerWorldMapPoints(config, raidMarkerState, worldMapPointManager, raidMarkerIcons);
 
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
@@ -279,6 +325,26 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (pingState != null) {
             pingState.clear();
             pingState = null;
+        }
+        if (raidMarkerViewportOverlay != null) {
+            overlayManager.remove(raidMarkerViewportOverlay);
+            raidMarkerViewportOverlay = null;
+        }
+        if (raidMarkerMinimapOverlay != null) {
+            overlayManager.remove(raidMarkerMinimapOverlay);
+            raidMarkerMinimapOverlay = null;
+        }
+        if (raidMarkerWorldMapPoints != null) {
+            raidMarkerWorldMapPoints.clear();
+            raidMarkerWorldMapPoints = null;
+        }
+        if (raidMarkerManager != null) {
+            raidMarkerManager.shutdown();
+            raidMarkerManager = null;
+        }
+        if (raidMarkerState != null) {
+            raidMarkerState.clear();
+            raidMarkerState = null;
         }
         if (rosterClient != null) {
             rosterClient.shutdown();
@@ -456,6 +522,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (pingManager != null) {
             pingManager.onGameTick(config);
         }
+        if (raidMarkerWorldMapPoints != null) {
+            raidMarkerWorldMapPoints.sync();
+        }
+        if (raidMarkerManager != null) {
+            raidMarkerManager.onGameTick(config);
+        }
 
         Widget groupStorageLoaderText = client.getWidget(GROUP_STORAGE_LOADER, 1);
         if (groupStorageLoaderText != null) {
@@ -481,6 +553,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
     public void onGameStateChanged(GameStateChanged event) {
         if (event.getGameState() == GameState.LOGGED_IN) {
             portraitCaptureManager.onLogin();
+        } else if (event.getGameState() == GameState.LOGIN_SCREEN || event.getGameState() == GameState.HOPPING) {
+            // Unlike a ping, a raid marker never auto-expires - clear all of the local player's
+            // markers on logout/world-hop so they don't linger for the rest of the group while
+            // this client is disconnected (the client stays the sole source of truth, same as pings).
+            if (raidMarkerManager != null) {
+                raidMarkerManager.clearAll(config);
+            }
         }
     }
 
@@ -566,6 +645,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
 
         addPingMenuEntry(event);
+        addRaidMarkerMenuEntries(event);
     }
 
     /**
@@ -656,6 +736,113 @@ public class GroupScapeTrackerPlugin extends Plugin {
             }
         }
         return null;
+    }
+
+    /**
+     * Adds a "Raid Markers" submenu (one child entry per {@link RaidMarkerType}) to whichever
+     * target applies to this menu - same NPC/world-map-widget/scene-tile priority order as
+     * {@link #addPingMenuEntry} - plus a single "Clear my raid markers here" entry if the local
+     * player already has any marker active on that exact target.
+     */
+    private void addRaidMarkerMenuEntries(MenuOpened event) {
+        if (!config.raidMarkersEnabled() || raidMarkerManager == null) return;
+
+        try {
+            NPC npc = findMenuNpc(event.getMenuEntries());
+            if (npc != null) {
+                addRaidMarkerEntriesForNpc(npc);
+                return;
+            }
+
+            net.runelite.api.Point mouse = client.getMouseCanvasPosition();
+            Widget worldMapWidget = client.getWidget(WorldMapCoordinates.WORLD_MAP_VIEW_WIDGET_ID);
+            if (worldMapWidget != null && !worldMapWidget.isHidden()
+                    && worldMapWidget.getBounds().contains(mouse.getX(), mouse.getY())) {
+                WorldPoint worldMapPoint = WorldMapCoordinates.canvasPointToWorldPoint(client, mouse);
+                if (worldMapPoint != null) {
+                    addRaidMarkerEntriesForTile(worldMapPoint);
+                }
+                return;
+            }
+
+            Tile tile = client.getSelectedSceneTile();
+            WorldPoint tileWorldPoint = tile != null ? tile.getWorldLocation() : null;
+            if (tileWorldPoint != null) {
+                addRaidMarkerEntriesForTile(tileWorldPoint);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to add raid marker menu entries", e);
+        }
+    }
+
+    private void addRaidMarkerEntriesForNpc(NPC npc) {
+        if (!raidMarkerManager.ownMarkerTypesOnNpc(npc).isEmpty()) {
+            addClearRaidMarkersEntry(() -> raidMarkerManager.clearOwnMarkersOnNpc(npc, config));
+        }
+
+        String label = npc.getName() != null ? npc.getName() : "NPC";
+        MenuEntry parent = client.createMenuEntry(-1)
+                .setOption("Raid Markers")
+                .setTarget(ColorUtil.wrapWithColorTag(label, Color.CYAN))
+                .setType(MenuAction.RUNELITE);
+        Menu submenu = parent.createSubMenu();
+        for (RaidMarkerType type : RaidMarkerType.values()) {
+            if (!isRaidMarkerMenuVisible(type)) continue;
+            submenu.createMenuEntry(-1)
+                    .setOption(type.displayName)
+                    .setType(MenuAction.RUNELITE)
+                    .onClick(e -> raidMarkerManager.dropNpcMarker(type, npc, config));
+        }
+    }
+
+    private void addRaidMarkerEntriesForTile(WorldPoint worldPoint) {
+        if (!raidMarkerManager.ownMarkerTypesOnTile(worldPoint).isEmpty()) {
+            addClearRaidMarkersEntry(() -> raidMarkerManager.clearOwnMarkersOnTile(worldPoint, config));
+        }
+
+        MenuEntry parent = client.createMenuEntry(-1)
+                .setOption("Raid Markers")
+                .setTarget(ColorUtil.wrapWithColorTag("here", Color.CYAN))
+                .setType(MenuAction.RUNELITE);
+        Menu submenu = parent.createSubMenu();
+        for (RaidMarkerType type : RaidMarkerType.values()) {
+            if (!isRaidMarkerMenuVisible(type)) continue;
+            submenu.createMenuEntry(-1)
+                    .setOption(type.displayName)
+                    .setType(MenuAction.RUNELITE)
+                    .onClick(e -> raidMarkerManager.dropTileMarker(type, worldPoint, config));
+        }
+    }
+
+    private void addClearRaidMarkersEntry(Runnable onClear) {
+        client.createMenuEntry(-1)
+                .setOption("Clear my raid markers here")
+                .setType(MenuAction.RUNELITE)
+                .onClick(e -> onClear.run());
+    }
+
+    /**
+     * Whether {@code type} should appear in the local player's own "Raid Markers" submenu, per the
+     * per-type checkboxes in {@link GroupScapeTrackerConfig}'s "Raid Marker Types" sections. This
+     * only ever hides entries from this player's own menu - it has no effect on rendering other
+     * group members' markers of that type.
+     */
+    private boolean isRaidMarkerMenuVisible(RaidMarkerType type) {
+        switch (type) {
+            case DANGER: return config.showMenuDanger();
+            case DEFEND: return config.showMenuDefend();
+            case LOOT: return config.showMenuLoot();
+            case FOCUS: return config.showMenuFocus();
+            case ONE: return config.showMenuOne();
+            case TWO: return config.showMenuTwo();
+            case THREE: return config.showMenuThree();
+            case FOUR: return config.showMenuFour();
+            case A: return config.showMenuA();
+            case B: return config.showMenuB();
+            case C: return config.showMenuC();
+            case D: return config.showMenuD();
+            default: return true;
+        }
     }
 
     /**
@@ -756,10 +943,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
         sendChatMessage(memberName + " killed " + npcName + "!");
     }
 
+    private static final Color GROUPSCAPE_CHAT_COLOR = new Color(170, 0, 255);
+
     private void sendChatMessage(String message) {
+        String prefixed = ColorUtil.wrapWithColorTag("[gs] " + message, GROUPSCAPE_CHAT_COLOR);
         chatMessageManager.queue(QueuedMessage.builder()
                 .type(ChatMessageType.CONSOLE)
-                .runeLiteFormattedMessage(message)
+                .runeLiteFormattedMessage(prefixed)
                 .build());
     }
 
@@ -827,8 +1017,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /**
      * No generic "NPC died" event exists in the RuneLite API (see {@link BossKillNpcNames}'s
-     * class doc) - {@code getHealthRatio() == 0} plus the curated name allowlist approximates
-     * it, ported from groupscape-old.
+     * class doc) - {@code getHealthRatio() == 0} (live at despawn, or last recorded via
+     * {@link #npcHealthRatioByIndex} if the health bar already hid by then) plus the curated name
+     * allowlist approximates it, ported from groupscape-old.
      */
     @Subscribe
     public void onNpcSpawned(NpcSpawned event) {
@@ -848,9 +1039,22 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     @Subscribe
+    public void onHitsplatApplied(HitsplatApplied event) {
+        if (!(event.getActor() instanceof NPC)) return;
+        NPC npc = (NPC) event.getActor();
+        int ratio = npc.getHealthRatio();
+        if (ratio >= 0) {
+            npcHealthRatioByIndex.put(npc.getIndex(), ratio);
+        }
+    }
+
+    @Subscribe
     public void onNpcDespawned(NpcDespawned event) {
         if (pingManager != null) {
             pingManager.onNpcDespawned(event.getNpc(), config);
+        }
+        if (raidMarkerManager != null) {
+            raidMarkerManager.onNpcDespawned(event.getNpc(), config);
         }
 
         if (doNotUseThisData()) return;
@@ -861,7 +1065,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
             name = npcNamesByIndex.get(npc.getIndex());
         }
         npcNamesByIndex.remove(npc.getIndex());
-        if (!BossKillNpcNames.isTrackedBoss(name) || npc.getHealthRatio() != 0) return;
+        Integer lastKnownRatio = npcHealthRatioByIndex.remove(npc.getIndex());
+        boolean diedAtZeroHp = npc.getHealthRatio() == 0 || (lastKnownRatio != null && lastKnownRatio == 0);
+        if (!BossKillNpcNames.isTrackedBoss(name) || !diedAtZeroHp) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;

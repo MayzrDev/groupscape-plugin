@@ -30,6 +30,9 @@ public class RosterClient {
     private static final String PING_START = "ping_start";
     private static final String PING_UPDATE = "ping_update";
     private static final String PING_END = "ping_end";
+    private static final String MARKER_START = "marker_start";
+    private static final String MARKER_UPDATE = "marker_update";
+    private static final String MARKER_END = "marker_end";
 
     /** Notified when another group member's kill arrives over the websocket. */
     public interface KillEventListener {
@@ -53,12 +56,24 @@ public class RosterClient {
         void onPingEnd(RosterWireTypes.PingEndPayload payload);
     }
 
+    /**
+     * Notified as a group member's raid marker (see {@link com.groupscape.roster.RaidMarkerManager})
+     * starts, moves (live NPC tracking), or ends. Includes the local player's own markers too, same
+     * as {@link PingEventListener}.
+     */
+    public interface RaidMarkerEventListener {
+        void onMarkerStart(RosterWireTypes.RaidMarkerStartPayload payload);
+        void onMarkerUpdate(RosterWireTypes.RaidMarkerUpdatePayload payload);
+        void onMarkerEnd(RosterWireTypes.RaidMarkerEndPayload payload);
+    }
+
     private final OkHttpClient okHttpClient;
     private final Gson gson;
     private final RosterState rosterState;
     private final KillEventListener killEventListener;
     private final DropEventListener dropEventListener;
     private final PingEventListener pingEventListener;
+    private final RaidMarkerEventListener raidMarkerEventListener;
     private final GroupLinkListener groupLinkListener;
     private final ScheduledExecutorService reconnectExecutor =
             Executors.newSingleThreadScheduledExecutor(r -> {
@@ -75,7 +90,7 @@ public class RosterClient {
 
     public RosterClient(OkHttpClient okHttpClient, Gson gson, RosterState rosterState, KillEventListener killEventListener,
                          DropEventListener dropEventListener, PingEventListener pingEventListener,
-                         GroupLinkListener groupLinkListener) {
+                         RaidMarkerEventListener raidMarkerEventListener, GroupLinkListener groupLinkListener) {
         // Derived from the shared RuneLite client (never mutate that one - other plugins use it).
         // Without a ping interval, a half-open connection (e.g. the backend disappearing behind a
         // proxy/LB during a rebuild without sending a clean close) never fires onClosed/onFailure,
@@ -88,6 +103,7 @@ public class RosterClient {
         this.killEventListener = killEventListener;
         this.dropEventListener = dropEventListener;
         this.pingEventListener = pingEventListener;
+        this.raidMarkerEventListener = raidMarkerEventListener;
         this.groupLinkListener = groupLinkListener;
     }
 
@@ -225,6 +241,24 @@ public class RosterClient {
                         gson.fromJson(envelope.payload, RosterWireTypes.PingEndPayload.class);
                 if (payload.pingId != null) {
                     pingEventListener.onPingEnd(payload);
+                }
+            } else if (MARKER_START.equals(envelope.type)) {
+                RosterWireTypes.RaidMarkerStartPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.RaidMarkerStartPayload.class);
+                if (payload.markerId != null && payload.memberName != null && payload.markerType != null) {
+                    raidMarkerEventListener.onMarkerStart(payload);
+                }
+            } else if (MARKER_UPDATE.equals(envelope.type)) {
+                RosterWireTypes.RaidMarkerUpdatePayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.RaidMarkerUpdatePayload.class);
+                if (payload.markerId != null) {
+                    raidMarkerEventListener.onMarkerUpdate(payload);
+                }
+            } else if (MARKER_END.equals(envelope.type)) {
+                RosterWireTypes.RaidMarkerEndPayload payload =
+                        gson.fromJson(envelope.payload, RosterWireTypes.RaidMarkerEndPayload.class);
+                if (payload.markerId != null) {
+                    raidMarkerEventListener.onMarkerEnd(payload);
                 }
             }
         } catch (Exception e) {

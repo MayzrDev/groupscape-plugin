@@ -2,10 +2,34 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.4] - 2026-08-31
+
+### Added
+- Raid markers now include four numbered (1-4) and four lettered (A-D) generic callouts, alongside Danger/Defend/Loot/Focus.
+- You can hide raid marker types you don't use from your own "Raid Markers" menu, in three new settings sections - this only tidies your menu, it doesn't hide other members' markers.
+
+### Changed
+- Renamed the "Safe Spot" raid marker to "Defend".
+- Chat messages from GroupScape (group notifications, pings, kill/loot lines) are now prefixed with "[gs]" and shown in purple, so they're easier to spot in a busy chat window.
+
+### Fixed
+- Boss kills are detected more reliably - some deaths were missed when the health bar hid itself before the kill could be confirmed.
+
+## [1.8.3] - 2026-08-31
+
+### Changed
+- Ping and raid marker beams (the optional vertical line under a marker) are no longer a separate setting - a tile ping/marker now always shows its beam, and an NPC ping/marker never does.
+
 ## [1.8.2] - 2026-08-31
 
 ### Fixed
 - Fixed the hold-to-ping hotkey still not working - it now cancels the walk/attack the same way RuneLite's own Party plugin does, instead of a method that never actually suppressed it.
+
+## [1.8.0] - 2026-08-31
+
+### Added
+- New "Raid Markers" feature (off by default - enable it in the settings). Right-click a tile or NPC to drop a Danger, Safe Spot, Loot, or Focus/Kill Target marker for your group to see - each shows its own icon and stays up until you clear/redrop it or the target dies, no timer. You can have one of each type active at a time, on a tile and on an NPC.
+- Pings and raid markers can now optionally show a vertical beam under the marker (off by default), similar to the Ground Items plugin's loot beam - toggle "Show ping beams" and "Show raid marker beams" separately in the settings.
 
 ## [1.7.11] - 2026-08-31
 
