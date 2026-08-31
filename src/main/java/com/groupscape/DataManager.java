@@ -94,6 +94,8 @@ public class DataManager {
     private final AlertEvents alertEvents = new AlertEvents();
     @Getter
     private final NotableDropEvents notableDropEvents = new NotableDropEvents();
+    @Getter
+    private final RaidCompletionEvents raidCompletionEvents = new RaidCompletionEvents();
 
     public void submitToApi() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;
@@ -129,6 +131,7 @@ public class DataManager {
             richPresence.consumeState(updates);
             collectionLogV2Manager.consumeClogItems(updates);
             killLootDeathEvents.consumeState(updates);
+            raidCompletionEvents.consumeState(updates);
             objectInteractionEvents.consumeState(updates);
             interactionEvents.consumeState(updates);
             alertEvents.consumeState(updates);
@@ -230,6 +233,7 @@ public class DataManager {
         activePrayers.restoreState();
         richPresence.restoreState();
         killLootDeathEvents.restoreState();
+        raidCompletionEvents.restoreState();
         objectInteractionEvents.restoreState();
         interactionEvents.restoreState();
         alertEvents.restoreState();

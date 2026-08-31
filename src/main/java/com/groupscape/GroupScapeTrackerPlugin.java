@@ -72,6 +72,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @PluginDescriptor(
@@ -1059,8 +1061,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@link KillLootDeathEvents#onChestOrClueLoot}. PvP/pickpocket loot sources aren't logged at
      * all yet, but everything is still eligible for the notable-drop check below regardless.
      */
+    /** The three raid reward-chest names - checked ahead of {@link ChestLootSourceNames}'s
+     * broader chest handling in {@link #onLootReceived} so raid chest loot is claimed by
+     * {@link RaidCompletionEvents} instead of also being logged as a standalone chest "loot"
+     * event (would otherwise double-report the same gold once folded into a raid completion). */
+    private static final Set<String> RAID_CHEST_NAMES = new HashSet<>(java.util.Arrays.asList(
+            "Chambers of Xeric", "Theatre of Blood", "Tombs of Amascut"));
+
     @Subscribe
     public void onLootReceived(LootReceived event) {
+        boolean claimedByRaidCompletion = false;
         if (event.getType() == LootRecordType.NPC) {
             List<Map<String, Object>> items = new ArrayList<>();
             for (ItemStack item : event.getItems()) {
@@ -1073,8 +1083,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
             boolean isClue = clueTier != null;
-            boolean isChest = !isClue && ChestLootSourceNames.isTrackedChest(event.getName());
-            if (isClue || isChest) {
+            boolean isRaidChest = !isClue && RAID_CHEST_NAMES.contains(event.getName());
+            boolean isChest = !isClue && !isRaidChest && ChestLootSourceNames.isTrackedChest(event.getName());
+            if (isRaidChest || isClue || isChest) {
                 Player local = client.getLocalPlayer();
                 WorldPoint wp = local == null ? null : local.getWorldLocation();
                 if (wp != null) {
@@ -1085,14 +1096,67 @@ public class GroupScapeTrackerPlugin extends Plugin {
                         entry.put("quantity", item.getQuantity());
                         items.add(entry);
                     }
-                    dataManager.getKillLootDeathEvents().onChestOrClueLoot(
-                            local.getName(), isClue ? "clue" : "chest", event.getName(), clueTier,
-                            wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
+                    if (isRaidChest) {
+                        claimedByRaidCompletion = dataManager.getRaidCompletionEvents().onRaidChestLoot(
+                                local.getName(), event.getName(),
+                                wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
+                    } else {
+                        dataManager.getKillLootDeathEvents().onChestOrClueLoot(
+                                local.getName(), isClue ? "clue" : "chest", event.getName(), clueTier,
+                                wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
+                    }
                 }
             }
         }
 
-        checkNotableDrop(event.getType(), event.getName(), event.getItems());
+        // Raid chest gold already gets its own total on the raid-completion entry - reporting it
+        // again here would double-count the same drop across two activity feed entries.
+        if (!claimedByRaidCompletion) {
+            checkNotableDrop(event.getType(), event.getName(), event.getItems());
+        }
+    }
+
+    /**
+     * CoX and ToA print a chat line on reward-chest interaction; ToB doesn't (its completion is
+     * inferred straight from the reward-chest {@code LootReceived} in {@link #onLootReceived}
+     * instead - see {@link RaidCompletionEvents#onRaidChestLoot}).
+     *
+     * TODO: the exact wording/casing below is modeled on the documented
+     * "Your completed X count is: N." family and has not been verified against a live completion
+     * message - confirm before release and adjust the patterns if the real strings differ.
+     */
+    private static final Pattern COX_COMPLETE_PATTERN = Pattern.compile(
+            "^Your completed Chambers of Xeric(?: (?<mode>Challenge Mode))? count is: [\\d,]+\\.$");
+    private static final Pattern TOA_COMPLETE_PATTERN = Pattern.compile(
+            "^Your completed Tombs of Amascut(?: (?<mode>Expert Mode))? count is: [\\d,]+\\.$");
+
+    @Subscribe
+    public void onChatMessage(ChatMessage event) {
+        if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
+        String message = Text.removeTags(event.getMessage());
+
+        Matcher cox = COX_COMPLETE_PATTERN.matcher(message);
+        if (cox.find()) {
+            dataManager.getRaidCompletionEvents().onChatCompletion(
+                    "cox", RaidCompletionEvents.RaidDifficulty.mode(cox.group("mode")));
+            return;
+        }
+
+        Matcher toa = TOA_COMPLETE_PATTERN.matcher(message);
+        if (toa.find()) {
+            dataManager.getRaidCompletionEvents().onChatCompletion(
+                    "toa", RaidCompletionEvents.RaidDifficulty.level(resolveToaInvocationLevel()));
+        }
+    }
+
+    /**
+     * TODO: unresolved - the numeric ToA invocation level isn't carried by the completion chat
+     * line (it only ever names a coarse mode), and this server hasn't confirmed which varbit or
+     * reward-interface widget exposes the raw invocation-point total. Returns -1 ("unknown
+     * level") until that's pinned down; wire up the real varbit/widget read here once confirmed.
+     */
+    private int resolveToaInvocationLevel() {
+        return -1;
     }
 
     /**

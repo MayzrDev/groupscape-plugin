@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.5] - 2026-09-01
+
+### Added
+- Finishing a raid (Chambers of Xeric, Theatre of Blood, or Tombs of Amascut) now reports it to your group's Activity Feed, along with the difficulty and how much the reward chest was worth.
+
 ## [1.8.4] - 2026-08-31
 
 ### Added
