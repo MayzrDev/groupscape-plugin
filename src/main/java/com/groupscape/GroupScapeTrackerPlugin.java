@@ -5,7 +5,10 @@ import com.google.inject.Provides;
 import com.groupscape.roster.GroupSnapshotClient;
 import com.groupscape.roster.GroupSnapshotMember;
 import com.groupscape.roster.GroupSnapshotState;
+import com.groupscape.roster.GroupWorldMapPoints;
 import com.groupscape.roster.LocalRosterMemberFactory;
+import com.groupscape.roster.MemberMapIcons;
+import com.groupscape.roster.MinimapLocationOverlay;
 import com.groupscape.roster.PartyFrameOverlay;
 import com.groupscape.roster.RosterClient;
 import com.groupscape.roster.RosterMember;
@@ -82,6 +85,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
     @Inject
     private OverlayManager overlayManager;
     @Inject
+    private net.runelite.client.ui.overlay.worldmap.WorldMapPointManager worldMapPointManager;
+    @Inject
+    private net.runelite.client.ui.overlay.tooltip.TooltipManager tooltipManager;
+    @Inject
     private OkHttpClient okHttpClient;
     @Inject
     private Gson gson;
@@ -101,6 +108,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private GroupSnapshotClient groupSnapshotClient;
     private PartyFrameOverlay partyFrameOverlay;
     private TileHighlightOverlay tileHighlightOverlay;
+    private MinimapLocationOverlay minimapLocationOverlay;
+    private GroupWorldMapPoints groupWorldMapPoints;
+    private final MemberMapIcons memberMapIcons = new MemberMapIcons();
     /**
      * The sidepanel's own "you" row, rebuilt on the client thread each
      * {@link #updateThingsThatDoChangeOften} tick and read from the Swing EDT via
@@ -177,6 +187,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
         overlayManager.add(partyFrameOverlay);
         tileHighlightOverlay = new TileHighlightOverlay(client, config, rosterState);
         overlayManager.add(tileHighlightOverlay);
+        minimapLocationOverlay = new MinimapLocationOverlay(client, config, rosterState, tooltipManager, memberMapIcons);
+        overlayManager.add(minimapLocationOverlay);
+        groupWorldMapPoints = new GroupWorldMapPoints(client, config, rosterState, worldMapPointManager, memberMapIcons);
 
         log.info("GroupScape Tracker v{} started!", PluginVersion.get());
     }
@@ -199,6 +212,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (tileHighlightOverlay != null) {
             overlayManager.remove(tileHighlightOverlay);
             tileHighlightOverlay = null;
+        }
+        if (minimapLocationOverlay != null) {
+            overlayManager.remove(minimapLocationOverlay);
+            minimapLocationOverlay = null;
+        }
+        if (groupWorldMapPoints != null) {
+            groupWorldMapPoints.clear();
+            groupWorldMapPoints = null;
         }
         if (rosterClient != null) {
             rosterClient.shutdown();
@@ -367,6 +388,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
         --itemsDeposited;
         updateInteracting();
         checkWildernessEntry();
+        if (groupWorldMapPoints != null) {
+            groupWorldMapPoints.sync();
+        }
 
         Widget groupStorageLoaderText = client.getWidget(GROUP_STORAGE_LOADER, 1);
         if (groupStorageLoaderText != null) {

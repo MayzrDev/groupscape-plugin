@@ -7,6 +7,12 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - Fixed group members intermittently disappearing from the party overlay and side panel (showing as offline) even though they were online — the "offline" cutoff was set equal to the idle heartbeat interval, leaving no room for normal network delay.
 
+## [1.7.6] - 2026-08-31
+
+### Added
+- Group members now show up on the world map and minimap while they're in your world and on your plane, marked with the same colored helm icon as the party overlay. On the world map, a member who's off-screen shows as an arrow at the map edge you can click to jump straight to them - just like clue and quest markers.
+- Added a "Map markers" toggle to turn this off.
+
 ## [1.7.5] - 2026-08-31
 
 ### Changed

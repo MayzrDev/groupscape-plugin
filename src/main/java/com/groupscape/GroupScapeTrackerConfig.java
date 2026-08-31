@@ -320,6 +320,24 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigSection(
+            name = "Map markers",
+            description = "Show group members' positions on the world map and minimap",
+            position = 5
+    )
+    String mapMarkersSection = "MapMarkersSection";
+
+    @ConfigItem(
+            keyName = "mapMarkersEnabled",
+            name = "Enable map markers",
+            description = "Show a group member's marker on the world map and minimap while they're in your world and on your plane",
+            section = mapMarkersSection,
+            position = 0
+    )
+    default boolean mapMarkersEnabled() {
+        return true;
+    }
+
+    @ConfigSection(
             name = "Sidepanel roster",
             description = "Configure the group roster shown in the GroupScape sidepanel",
             position = 4

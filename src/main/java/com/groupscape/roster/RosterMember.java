@@ -34,6 +34,9 @@ public class RosterMember {
     public Integer targetHealthScale;
     public List<String> activePrayers = Collections.emptyList();
     public String richPresence;
+    public Integer worldX;
+    public Integer worldY;
+    public Integer plane;
 
     public RosterMember(String name) {
         this.name = name;
@@ -60,6 +63,14 @@ public class RosterMember {
         this.targetHealthScale = vitals.targetHealthScale;
         this.activePrayers = vitals.activePrayers != null ? vitals.activePrayers : Collections.emptyList();
         this.richPresence = vitals.richPresence;
+
+        // Sent independently of the hp/prayer bundle above - a heartbeat can carry a position
+        // update without touching vitals, so this isn't gated by the same all-or-nothing check.
+        if (vitals.coordinates != null && vitals.coordinates.size() >= 3) {
+            this.worldX = vitals.coordinates.get(0);
+            this.worldY = vitals.coordinates.get(1);
+            this.plane = vitals.coordinates.get(2);
+        }
 
         if (vitals.lastHeartbeatAt != null) {
             try {

@@ -59,5 +59,7 @@ public class RosterWireTypes {
         public Integer targetHealthScale;
         public List<String> activePrayers;
         public String richPresence;
+        /** {@code [x, y, plane, ...]} - see the server's {@code WireVitals.coordinates}. */
+        public List<Integer> coordinates;
     }
 }
