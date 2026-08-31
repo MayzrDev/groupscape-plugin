@@ -8,7 +8,8 @@ import java.util.Set;
  * Curated allowlist of chest/instance reward source names, matched against
  * {@code LootReceived.getName()} when {@code getType() == LootRecordType.EVENT} - these are
  * never correlated to an NPC kill (there's often no {@code NpcDespawned} to hook at all, e.g.
- * raids), unlike {@link BossKillNpcNames}'s kill-detection list.
+ * raids), unlike the {@code NpcDespawned}-based kill-detection in
+ * {@link com.groupscape.GroupScapeTrackerPlugin#onNpcDespawned}.
  *
  * Kept in sync with the server's chest-loot allowlist (server/src/loot_sources.rs).
  */

@@ -157,8 +157,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * NPC index -> last-known name, refreshed on every sighting. {@code npc.getName()} can
      * return {@code null} by the time {@link NpcDespawned} fires (composition data already
      * cleared), which previously made {@link #onNpcDespawned} silently drop otherwise-trackable
-     * boss kills (e.g. Vorkath) with {@link BossKillNpcNames#isTrackedBoss} always seeing
-     * {@code null}. Trimmed on despawn so this doesn't grow unbounded.
+     * kills with a {@code null} name. Trimmed on despawn so this doesn't grow unbounded.
      */
     private final Map<Integer, String> npcNamesByIndex = new HashMap<>();
     /**
@@ -1016,10 +1015,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     /**
-     * No generic "NPC died" event exists in the RuneLite API (see {@link BossKillNpcNames}'s
-     * class doc) - {@code getHealthRatio() == 0} (live at despawn, or last recorded via
-     * {@link #npcHealthRatioByIndex} if the health bar already hid by then) plus the curated name
-     * allowlist approximates it, ported from groupscape-old.
+     * No generic "NPC died" event exists in the RuneLite API - {@code getHealthRatio() == 0}
+     * (live at despawn, or last recorded via {@link #npcHealthRatioByIndex} if the health bar
+     * already hid by then) approximates it for every NPC, not just a curated boss list (that
+     * allowlist was dropped: it silently discarded loot from any monster it didn't recognize,
+     * which is most of normal play). Known gaps this doesn't special-case: gargoyles/rockslugs
+     * (die above 0hp), KQ/Vet'ion (mid-fight transforms), Amoxliatl (non-standard health bar).
+     * Dual-NPC encounters (Dusk/Dawn, Eldric the Ice King/Verak Lith) aren't combined either -
+     * each half despawning at 0 health fires its own kill event.
      */
     @Subscribe
     public void onNpcSpawned(NpcSpawned event) {
@@ -1067,7 +1070,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         npcNamesByIndex.remove(npc.getIndex());
         Integer lastKnownRatio = npcHealthRatioByIndex.remove(npc.getIndex());
         boolean diedAtZeroHp = npc.getHealthRatio() == 0 || (lastKnownRatio != null && lastKnownRatio == 0);
-        if (!BossKillNpcNames.isTrackedBoss(name) || !diedAtZeroHp) return;
+        if (name == null || !diedAtZeroHp) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;

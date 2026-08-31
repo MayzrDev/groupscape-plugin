@@ -13,9 +13,12 @@ import java.time.Instant;
  * accumulator pattern rather than DataState's latest-value-wins one) and drains everything
  * buffered since the last upload into the "events" key on the next {@code consumeState}.
  *
- * Kill+loot correlation is best-effort only, ported from groupscape-old: a kill is held
- * here and a same-NPC-name loot arriving before the next drain gets attached to it; if loot
- * never arrives in time the kill still ships without it rather than being held back.
+ * Kill+loot correlation is best-effort, matched by NPC name. It runs in both directions:
+ * a same-name {@code LootReceived} arriving after {@code NpcDespawned} attaches straight to
+ * the held {@link PendingKill}; one arriving *before* it (loot is typically granted before the
+ * corpse actually despawns) is buffered in {@link #pendingUnmatchedLoot} and claimed by the
+ * next matching {@link #onKill}. If neither ever pairs up before the next drain, the kill still
+ * ships without loot and the loot is dropped rather than held back indefinitely.
  *
  * Chest/clue loot (see {@link #onChestOrClueLoot}) is unrelated to that correlation - it has
  * no kill to attach to, so it's queued and drained as its own standalone "loot"-typed event
@@ -25,15 +28,32 @@ import java.time.Instant;
  * one. Must only be touched from the client thread.
  */
 public class KillLootDeathEvents {
+    /** Bound on {@link #pendingUnmatchedLoot} so a kill that never despawns (e.g. NPC leaves
+     * the area) can't leak memory - the oldest unmatched loot is dropped once this is hit. */
+    private static final int MAX_UNMATCHED_LOOT = 20;
+
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
     private final List<Map<String, Object>> pendingLoot = new ArrayList<>();
+    // Internal correlation buffer only - unlike pendingKills/Deaths/Loot it's never itself part
+    // of the "events" upload, so consumeState/restoreState don't touch it.
+    private final List<UnmatchedLoot> pendingUnmatchedLoot = new ArrayList<>();
     private String owner;
 
     private List<PendingKill> consumedKills;
     private List<Map<String, Object>> consumedDeaths;
     private List<Map<String, Object>> consumedLoot;
     private String consumedOwner;
+
+    private static final class UnmatchedLoot {
+        final String npcName;
+        final List<Map<String, Object>> items;
+
+        UnmatchedLoot(String npcName, List<Map<String, Object>> items) {
+            this.npcName = npcName;
+            this.items = items;
+        }
+    }
 
     private static final class PendingKill {
         final int npcId;
@@ -74,7 +94,17 @@ public class KillLootDeathEvents {
 
     public synchronized void onKill(String playerName, int npcId, String npcName, int worldX, int worldY, int plane, int world) {
         owner = playerName;
-        pendingKills.add(new PendingKill(npcId, npcName, worldX, worldY, plane, world));
+        PendingKill kill = new PendingKill(npcId, npcName, worldX, worldY, plane, world);
+        // Claim the oldest same-name loot that arrived before this despawn, if any (see class doc).
+        for (int i = 0; i < pendingUnmatchedLoot.size(); i++) {
+            UnmatchedLoot loot = pendingUnmatchedLoot.get(i);
+            if (loot.npcName.equals(npcName)) {
+                kill.loot = loot.items;
+                pendingUnmatchedLoot.remove(i);
+                break;
+            }
+        }
+        pendingKills.add(kill);
     }
 
     /**
@@ -91,7 +121,11 @@ public class KillLootDeathEvents {
                 return;
             }
         }
-        // No matching pending kill - dropped, not retried or queued (see class doc).
+        // No matching pending kill yet - buffer it for onKill to claim once the despawn fires.
+        if (pendingUnmatchedLoot.size() >= MAX_UNMATCHED_LOOT) {
+            pendingUnmatchedLoot.remove(0);
+        }
+        pendingUnmatchedLoot.add(new UnmatchedLoot(npcName, items));
     }
 
     /**

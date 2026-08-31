@@ -25,6 +25,12 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - Fixed the hold-to-ping hotkey still not working - it now cancels the walk/attack the same way RuneLite's own Party plugin does, instead of a method that never actually suppressed it.
 
+## [1.8.1] - 2026-08-31
+
+### Fixed
+- Loot log now tracks kills from every monster, not just a short list of bosses - previously it silently ignored loot from anything not on that list, which was most normal play.
+- Fixed a timing issue where loot could sometimes go untracked even for a monster it was watching, if the loot dropped a moment before the kill was detected.
+
 ## [1.8.0] - 2026-08-31
 
 ### Added
