@@ -1156,11 +1156,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@code ActorDeath} filtered to the local player. Killer attribution is best-effort only
      * via {@code Actor.getInteracting()} (the closest available signal - there is no attacker
      * field on hitsplats), ported from groupscape-old.
+     *
+     * RuneLite's {@code ActorDeath} is driven off death animation IDs client-side and can fire
+     * without an actual death (anim ID reuse, desync). Corroborate with the real hitpoints stat
+     * before reporting, since that's server-authoritative.
      */
     @Subscribe
     public void onActorDeath(ActorDeath event) {
         Player local = client.getLocalPlayer();
         if (event.getActor() != local) return;
+        if (client.getBoostedSkillLevel(Skill.HITPOINTS) > 0) return;
 
         WorldPoint wp = local.getWorldLocation();
         if (wp == null) return;
