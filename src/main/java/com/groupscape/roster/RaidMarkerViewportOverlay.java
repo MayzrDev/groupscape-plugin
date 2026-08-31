@@ -1,8 +1,10 @@
 package com.groupscape.roster;
 
 import com.groupscape.GroupScapeTrackerConfig;
+import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Polygon;
@@ -27,6 +29,7 @@ import net.runelite.client.ui.overlay.OverlayPriority;
 public class RaidMarkerViewportOverlay extends Overlay {
     private static final int ICON_HEIGHT = 32;
     private static final int MARKER_HEIGHT = 170;
+    private static final float MARKER_ALPHA = 0.5f;
 
     private final Client client;
     private final GroupScapeTrackerConfig config;
@@ -50,6 +53,9 @@ public class RaidMarkerViewportOverlay extends Overlay {
             return null;
         }
 
+        Composite originalComposite = graphics.getComposite();
+        graphics.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, MARKER_ALPHA));
+
         for (RaidMarkerState.ActiveMarker marker : raidMarkerState.all()) {
             if (marker.plane != client.getPlane()) continue;
 
@@ -69,6 +75,7 @@ public class RaidMarkerViewportOverlay extends Overlay {
             drawIcon(graphics, localPoint, marker.markerType);
         }
 
+        graphics.setComposite(originalComposite);
         return null;
     }
 

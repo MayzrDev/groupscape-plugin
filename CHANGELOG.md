@@ -12,6 +12,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Renamed the "Safe Spot" raid marker to "Defend".
 - Chat messages from GroupScape (group notifications, pings, kill/loot lines) are now prefixed with "[gs]" and shown in purple, so they're easier to spot in a busy chat window.
 - "Ping" and "Raid Markers" now only show up in the right-click menu when you shift-right-click, so a plain right-click stays uncluttered.
+- Raid markers in the game world are now semi-transparent, so they don't fully block your view of what's underneath them.
 
 ### Removed
 - The hold-to-ping hotkey (Z by default) is gone - use shift-right-click instead.
