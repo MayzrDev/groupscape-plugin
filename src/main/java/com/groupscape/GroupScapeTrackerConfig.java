@@ -425,55 +425,11 @@ public interface GroupScapeTrackerConfig extends Config {
     }
 
     @ConfigItem(
-            keyName = "showMenuOne",
-            name = "1",
-            description = "Show \"1\" in your Raid Markers menu",
-            section = raidMarkerTypesSection,
-            position = 4
-    )
-    default boolean showMenuOne() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "showMenuTwo",
-            name = "2",
-            description = "Show \"2\" in your Raid Markers menu",
-            section = raidMarkerTypesSection,
-            position = 5
-    )
-    default boolean showMenuTwo() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "showMenuThree",
-            name = "3",
-            description = "Show \"3\" in your Raid Markers menu",
-            section = raidMarkerTypesSection,
-            position = 6
-    )
-    default boolean showMenuThree() {
-        return true;
-    }
-
-    @ConfigItem(
-            keyName = "showMenuFour",
-            name = "4",
-            description = "Show \"4\" in your Raid Markers menu",
-            section = raidMarkerTypesSection,
-            position = 7
-    )
-    default boolean showMenuFour() {
-        return true;
-    }
-
-    @ConfigItem(
             keyName = "showMenuA",
             name = "A",
             description = "Show \"A\" in your Raid Markers menu",
             section = raidMarkerTypesSection,
-            position = 8
+            position = 4
     )
     default boolean showMenuA() {
         return true;
@@ -484,7 +440,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "B",
             description = "Show \"B\" in your Raid Markers menu",
             section = raidMarkerTypesSection,
-            position = 9
+            position = 5
     )
     default boolean showMenuB() {
         return true;
@@ -495,7 +451,7 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "C",
             description = "Show \"C\" in your Raid Markers menu",
             section = raidMarkerTypesSection,
-            position = 10
+            position = 6
     )
     default boolean showMenuC() {
         return true;
@@ -506,9 +462,53 @@ public interface GroupScapeTrackerConfig extends Config {
             name = "D",
             description = "Show \"D\" in your Raid Markers menu",
             section = raidMarkerTypesSection,
-            position = 11
+            position = 7
     )
     default boolean showMenuD() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "showMenuOne",
+            name = "1",
+            description = "Show \"1\" in your Raid Markers menu",
+            section = raidMarkerTypesSection,
+            position = 8
+    )
+    default boolean showMenuOne() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "showMenuTwo",
+            name = "2",
+            description = "Show \"2\" in your Raid Markers menu",
+            section = raidMarkerTypesSection,
+            position = 9
+    )
+    default boolean showMenuTwo() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "showMenuThree",
+            name = "3",
+            description = "Show \"3\" in your Raid Markers menu",
+            section = raidMarkerTypesSection,
+            position = 10
+    )
+    default boolean showMenuThree() {
+        return true;
+    }
+
+    @ConfigItem(
+            keyName = "showMenuFour",
+            name = "4",
+            description = "Show \"4\" in your Raid Markers menu",
+            section = raidMarkerTypesSection,
+            position = 11
+    )
+    default boolean showMenuFour() {
         return true;
     }
 

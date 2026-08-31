@@ -19,6 +19,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Boss kills are detected more reliably - some deaths were missed when the health bar hid itself before the kill could be confirmed.
+- Shift-right-click now actually shows the "Ping" and "Raid Markers" menu entries - they were silently never appearing due to a wrong key check.
 
 ## [1.8.3] - 2026-08-31
 

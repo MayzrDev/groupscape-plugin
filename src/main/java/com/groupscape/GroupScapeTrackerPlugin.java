@@ -63,7 +63,6 @@ import okhttp3.OkHttpClient;
 import javax.inject.Inject;
 import java.awt.Color;
 import java.awt.Toolkit;
-import java.awt.event.KeyEvent;
 import java.awt.datatransfer.StringSelection;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -727,8 +726,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
     }
 
+    /** RuneLite's Client.isKeyPressed uses its own internal key-state array, not
+     * java.awt.event.KeyEvent codes - 81 is shift there (same value core plugins like
+     * GroundItems/GroundMarkers/MenuEntrySwapper use for their own shift checks). */
+    private static final int RUNELITE_VK_SHIFT = 81;
+
     private boolean isShiftHeld() {
-        return client.isKeyPressed(KeyEvent.VK_SHIFT);
+        return client.isKeyPressed(RUNELITE_VK_SHIFT);
     }
 
     private NPC findMenuNpc(MenuEntry[] entries) {

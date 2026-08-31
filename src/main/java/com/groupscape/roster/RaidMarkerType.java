@@ -16,15 +16,15 @@ public enum RaidMarkerType {
     LOOT("Loot", "loot", "#d4af37", "raid-marker-loot.png"),
     FOCUS("Focus / Kill Target", "focus", "#a855f7", "raid-marker-focus.png"),
 
-    ONE("1", "one", "#3b82f6", null),
-    TWO("2", "two", "#0ea5e9", null),
-    THREE("3", "three", "#14b8a6", null),
-    FOUR("4", "four", "#6366f1", null),
-
     A("A", "a", "#f97316", null),
     B("B", "b", "#ec4899", null),
     C("C", "c", "#84cc16", null),
-    D("D", "d", "#64748b", null);
+    D("D", "d", "#64748b", null),
+
+    ONE("1", "one", "#3b82f6", null),
+    TWO("2", "two", "#0ea5e9", null),
+    THREE("3", "three", "#14b8a6", null),
+    FOUR("4", "four", "#6366f1", null);
 
     public final String displayName;
     /** The value sent over the wire - matches the server's {@code websocket::MarkerType} snake_case rename. */
