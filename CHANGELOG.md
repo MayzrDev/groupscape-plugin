@@ -9,6 +9,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Discord boss kill notifications now show your account's real kill count (read from the "kill count is" chat message) instead of a count of kills GroupScape happened to see logged on its own server.
+- Fixed loot going missing from the Activity Feed (and its Discord notification) for bosses that split their drop across more than one loot roll per kill, such as Vet'ion - only the first roll was being kept before.
 
 ## [1.8.4] - 2026-08-31
 

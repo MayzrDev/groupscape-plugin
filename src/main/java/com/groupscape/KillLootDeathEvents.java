@@ -136,16 +136,25 @@ public class KillLootDeathEvents {
     }
 
     /**
-     * Attaches loot to the most recently-queued still-unloot-attached pending kill for this
-     * NPC name. Matching by name (not id) since {@code LootReceived} exposes the NPC's
-     * composition name, not necessarily the same id {@code NpcDespawned} reported for
-     * multi-form bosses.
+     * Attaches loot to the most recently-queued pending kill for this NPC name, merging into
+     * any loot already attached rather than requiring the kill to still be loot-less. Some
+     * bosses (e.g. Vet'ion, whose mid-fight transform splits its reward across multiple loot
+     * table rolls) fire {@code LootReceived} more than once for a single kill; requiring
+     * {@code kill.loot == null} would route that second batch to {@link #pendingUnmatchedLoot}
+     * as if it belonged to a future kill, where it would only be reclaimed by another kill of
+     * the same NPC name - silently losing the loot (and the items in it) otherwise. Matching by
+     * name (not id) since {@code LootReceived} exposes the NPC's composition name, not
+     * necessarily the same id {@code NpcDespawned} reported for multi-form bosses.
      */
     public synchronized void onLoot(String npcName, List<Map<String, Object>> items) {
         for (int i = pendingKills.size() - 1; i >= 0; i--) {
             PendingKill kill = pendingKills.get(i);
-            if (kill.npcName.equals(npcName) && kill.loot == null) {
-                kill.loot = items;
+            if (kill.npcName.equals(npcName)) {
+                if (kill.loot == null) {
+                    kill.loot = new ArrayList<>(items);
+                } else {
+                    kill.loot.addAll(items);
+                }
                 return;
             }
         }
