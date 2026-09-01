@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.time.Instant;
+import java.util.UUID;
 
 /**
  * Kill/loot/death/chest-or-clue-loot aren't per-tick snapshot data like the rest of
@@ -26,6 +27,12 @@ import java.time.Instant;
  * {@link #consumeState}, so a second, independent accumulator would race with this one over
  * who last wrote that key - hence chest/clue loot living on this class rather than a sibling
  * one. Must only be touched from the client thread.
+ *
+ * Every event gets a random {@code eventId} at the moment it's captured (in {@link PendingKill}'s
+ * constructor, {@link #onDeath}, {@link #onChestOrClueLoot}) rather than when it's sent, so a
+ * resend from {@link #restoreState} - e.g. after a server restart drops the connection before its
+ * (already-successful) response reaches the client - carries the same id both times and the
+ * server can reject the replay instead of double-counting the kill/loot/death.
  */
 public class KillLootDeathEvents {
     /** Bound on {@link #pendingUnmatchedLoot} so a kill that never despawns (e.g. NPC leaves
@@ -78,6 +85,11 @@ public class KillLootDeathEvents {
         final int plane;
         final int world;
         final String occurredAt;
+        // Generated once here, at capture time, not on every send - consumeState/restoreState
+        // requeue this same PendingKill object verbatim on a failed upload, so a resend carries
+        // the identical id and the server can recognize it as a replay rather than a new kill
+        // (see DataManager.restoreStateIfNothingUpdated).
+        final String eventId;
         List<Map<String, Object>> loot;
         Integer accountKc;
 
@@ -89,6 +101,7 @@ public class KillLootDeathEvents {
             this.plane = plane;
             this.world = world;
             this.occurredAt = Instant.now().toString();
+            this.eventId = UUID.randomUUID().toString();
         }
 
         Map<String, Object> toMap() {
@@ -101,6 +114,7 @@ public class KillLootDeathEvents {
             event.put("plane", plane);
             event.put("world", world);
             event.put("occurredAt", occurredAt);
+            event.put("eventId", eventId);
             if (loot != null) {
                 event.put("loot", loot);
             }
@@ -211,6 +225,7 @@ public class KillLootDeathEvents {
         loot.put("plane", plane);
         loot.put("world", world);
         loot.put("occurredAt", Instant.now().toString());
+        loot.put("eventId", UUID.randomUUID().toString());
         loot.put("loot", items);
         pendingLoot.add(loot);
     }
@@ -224,6 +239,7 @@ public class KillLootDeathEvents {
         death.put("plane", plane);
         death.put("world", world);
         death.put("occurredAt", Instant.now().toString());
+        death.put("eventId", UUID.randomUUID().toString());
         if (killerName != null) {
             death.put("killerName", killerName);
         }
