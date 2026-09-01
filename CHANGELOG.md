@@ -7,6 +7,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Added
 - Finishing a raid (Chambers of Xeric, Theatre of Blood, or Tombs of Amascut) now reports it to your group's Activity Feed, along with the difficulty and how much the reward chest was worth.
 
+### Fixed
+- Discord boss kill notifications now show your account's real kill count (read from the "kill count is" chat message) instead of a count of kills GroupScape happened to see logged on its own server.
+
 ## [1.8.4] - 2026-08-31
 
 ### Added

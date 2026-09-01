@@ -1130,6 +1130,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final Pattern TOA_COMPLETE_PATTERN = Pattern.compile(
             "^Your completed Tombs of Amascut(?: (?<mode>Expert Mode))? count is: [\\d,]+\\.$");
 
+    /** e.g. "Your Zulrah kill count is: 45." - the account's real, authoritative KC, as opposed
+     * to how many times this server has happened to see the boss's kill logged. */
+    private static final Pattern KILL_COUNT_PATTERN = Pattern.compile(
+            "^Your (?<boss>.+?) kill count is: (?<kc>[\\d,]+)\\.$");
+
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -1146,6 +1151,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (toa.find()) {
             dataManager.getRaidCompletionEvents().onChatCompletion(
                     "toa", RaidCompletionEvents.RaidDifficulty.level(resolveToaInvocationLevel()));
+            return;
+        }
+
+        Matcher kc = KILL_COUNT_PATTERN.matcher(message);
+        if (kc.find()) {
+            int accountKc = Integer.parseInt(kc.group("kc").replace(",", ""));
+            dataManager.getKillLootDeathEvents().onKillCount(kc.group("boss"), accountKc);
         }
     }
 

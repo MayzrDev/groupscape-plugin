@@ -35,9 +35,14 @@ public class KillLootDeathEvents {
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
     private final List<Map<String, Object>> pendingLoot = new ArrayList<>();
-    // Internal correlation buffer only - unlike pendingKills/Deaths/Loot it's never itself part
-    // of the "events" upload, so consumeState/restoreState don't touch it.
+    // Internal correlation buffers only - unlike pendingKills/Deaths/Loot they're never
+    // themselves part of the "events" upload, so consumeState/restoreState don't touch them.
     private final List<UnmatchedLoot> pendingUnmatchedLoot = new ArrayList<>();
+    // Bound for the same leak reason as pendingUnmatchedLoot: an "X kill count is" line whose
+    // boss never actually despawns (e.g. a kill count chat message from a source we don't track
+    // a despawn for) can't accumulate forever.
+    private static final int MAX_UNMATCHED_KC = 20;
+    private final List<UnmatchedKc> pendingUnmatchedKc = new ArrayList<>();
     private String owner;
 
     private List<PendingKill> consumedKills;
@@ -55,6 +60,16 @@ public class KillLootDeathEvents {
         }
     }
 
+    private static final class UnmatchedKc {
+        final String npcName;
+        final int accountKc;
+
+        UnmatchedKc(String npcName, int accountKc) {
+            this.npcName = npcName;
+            this.accountKc = accountKc;
+        }
+    }
+
     private static final class PendingKill {
         final int npcId;
         final String npcName;
@@ -64,6 +79,7 @@ public class KillLootDeathEvents {
         final int world;
         final String occurredAt;
         List<Map<String, Object>> loot;
+        Integer accountKc;
 
         PendingKill(int npcId, String npcName, int worldX, int worldY, int plane, int world) {
             this.npcId = npcId;
@@ -88,6 +104,9 @@ public class KillLootDeathEvents {
             if (loot != null) {
                 event.put("loot", loot);
             }
+            if (accountKc != null) {
+                event.put("accountKc", accountKc);
+            }
             return event;
         }
     }
@@ -101,6 +120,15 @@ public class KillLootDeathEvents {
             if (loot.npcName.equals(npcName)) {
                 kill.loot = loot.items;
                 pendingUnmatchedLoot.remove(i);
+                break;
+            }
+        }
+        // Same correlation for a "Your X kill count is: N." chat line that beat the despawn.
+        for (int i = 0; i < pendingUnmatchedKc.size(); i++) {
+            UnmatchedKc kc = pendingUnmatchedKc.get(i);
+            if (kc.npcName.equals(npcName)) {
+                kill.accountKc = kc.accountKc;
+                pendingUnmatchedKc.remove(i);
                 break;
             }
         }
@@ -126,6 +154,28 @@ public class KillLootDeathEvents {
             pendingUnmatchedLoot.remove(0);
         }
         pendingUnmatchedLoot.add(new UnmatchedLoot(npcName, items));
+    }
+
+    /**
+     * Attaches the account's real in-game kill count (parsed from the "Your X kill count is: N."
+     * chat line) to the most recently-queued still-unattached pending kill for this NPC name -
+     * this is the authoritative KC a Discord kill notification should show, not a count of kills
+     * this server happened to see logged. Mirrors {@link #onLoot}'s correlation: the chat line
+     * can arrive either before or after {@code NpcDespawned}, so an unmatched one is buffered for
+     * {@link #onKill} to claim.
+     */
+    public synchronized void onKillCount(String npcName, int accountKc) {
+        for (int i = pendingKills.size() - 1; i >= 0; i--) {
+            PendingKill kill = pendingKills.get(i);
+            if (kill.npcName.equals(npcName) && kill.accountKc == null) {
+                kill.accountKc = accountKc;
+                return;
+            }
+        }
+        if (pendingUnmatchedKc.size() >= MAX_UNMATCHED_KC) {
+            pendingUnmatchedKc.remove(0);
+        }
+        pendingUnmatchedKc.add(new UnmatchedKc(npcName, accountKc));
     }
 
     /**
