@@ -75,6 +75,8 @@ public class DataManager {
     @Getter
     private final DataState combatAchievements = new DataState("combat_achievements", false);
     @Getter
+    private final DataState slayerTask = new DataState("slayer_task", false);
+    @Getter
     private final DataState specialAttack = new DataState("special_attack", false);
     @Getter
     private final DataState activePrayers = new DataState("active_prayers", false);
@@ -126,6 +128,7 @@ public class DataManager {
             potionStorage.consumeState(updates);
             achievementDiary.consumeState(updates);
             combatAchievements.consumeState(updates);
+            slayerTask.consumeState(updates);
             specialAttack.consumeState(updates);
             activePrayers.consumeState(updates);
             richPresence.consumeState(updates);
@@ -229,6 +232,7 @@ public class DataManager {
         potionStorage.restoreState();
         achievementDiary.restoreState();
         combatAchievements.restoreState();
+        slayerTask.restoreState();
         specialAttack.restoreState();
         activePrayers.restoreState();
         richPresence.restoreState();

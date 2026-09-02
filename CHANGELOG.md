@@ -4,6 +4,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ## [1.8.6] - 2026-09-02
 
+### Added
+- Your current slayer task, master, points, and streak are now reported to your group, so the website can show them in each member's side panel.
+
 ### Fixed
 - Fixed your own row in the party overlay always showing a gold accent bar instead of your assigned helmet colour, even though every other group member's row already showed theirs correctly.
 - Fixed Tombs of Amascut (and occasionally Chambers of Xeric) completions sometimes not appearing in the Activity Feed at all - the reward chest loot is now enough on its own to log the completion, instead of requiring an in-game chat message to line up with it first.

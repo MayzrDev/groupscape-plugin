@@ -1,0 +1,135 @@
+package com.groupscape;
+
+import net.runelite.api.Client;
+import net.runelite.api.gameval.DBTableID;
+import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Current slayer task, read passively off client varps/varbits - no slayer log or task widget
+ * needs to be open. {@code VarPlayerID#SLAYER_TARGET} is the task id (0/negative both observed
+ * as "no task assigned", e.g. between turning in a task and getting a new one); task name and
+ * area name are looked up from the game's own DB tables rather than shipping a static id->name
+ * table here, the same way RuneLite core's SlayerPlugin resolves them.
+ *
+ * <p>There is no varbit or DB row that names the assigning master directly - {@code
+ * VarbitID#SLAYER_MASTER} is a small ordinal (used only to pick which "tasks completed" counter
+ * applies, see the streak switch below), not an index into a master list. The master name is
+ * instead captured passively from NPC dialogue text elsewhere (see
+ * {@code GroupScapeTrackerPlugin#captureSlayerTaskMasterDialogue}) and snapshotted into {@code
+ * masterName} by the caller whenever {@code SLAYER_TARGET}/{@code SLAYER_COUNT_ORIGINAL} change -
+ * i.e. a new task was just assigned. A known gap: if the plugin/client is (re)started mid-task,
+ * no dialogue snapshot exists yet, so {@code masterName} reads null until the next task change.
+ */
+public class SlayerTaskState implements ConsumableState {
+    private final transient String playerName;
+    private final boolean hasTask;
+    private final String masterName;
+    private final String taskName;
+    private final String taskLocation;
+    private final int amountRemaining;
+    private final int initialAmount;
+    private final int points;
+    private final int streak;
+
+    public SlayerTaskState(String playerName, Client client, String masterName) {
+        this.playerName = playerName;
+
+        int taskId = client.getVarpValue(VarPlayerID.SLAYER_TARGET);
+        this.hasTask = taskId > 0;
+        this.amountRemaining = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
+        this.initialAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
+        this.points = client.getVarbitValue(VarbitID.SLAYER_POINTS);
+
+        // Krystilia (wilderness) and Mortimer (Managing Miscellania hard diary reward) keep their
+        // own separate "tasks completed" counters instead of feeding the regular one - ported
+        // 1:1 from RuneLite core's SlayerPlugin streak logic.
+        int master = client.getVarbitValue(VarbitID.SLAYER_MASTER);
+        switch (master) {
+            case 7:
+                this.streak = client.getVarbitValue(VarbitID.SLAYER_WILDERNESS_TASKS_COMPLETED);
+                break;
+            case 10:
+                this.streak = client.getVarpValue(VarPlayerID.SLAYER_MORTIMER_TASKS_COMPLETED);
+                break;
+            default:
+                this.streak = client.getVarbitValue(VarbitID.SLAYER_TASKS_COMPLETED);
+                break;
+        }
+
+        if (hasTask) {
+            this.masterName = masterName;
+            this.taskName = resolveTaskName(client, taskId);
+            int areaId = client.getVarpValue(VarPlayerID.SLAYER_AREA);
+            this.taskLocation = resolveAreaName(client, areaId);
+        } else {
+            this.masterName = null;
+            this.taskName = null;
+            this.taskLocation = null;
+        }
+    }
+
+    private static String resolveTaskName(Client client, int taskId) {
+        List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0, taskId);
+        if (rows.isEmpty()) return null;
+
+        Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0);
+        return fields.length > 0 ? (String) fields[0] : null;
+    }
+
+    private static String resolveAreaName(Client client, int areaId) {
+        if (areaId <= 0) return null;
+
+        List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerArea.ID, DBTableID.SlayerArea.COL_AREA_ID, 0, areaId);
+        if (rows.isEmpty()) return null;
+
+        Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerArea.COL_AREA_NAME_IN_HELPER, 0);
+        return fields.length > 0 ? (String) fields[0] : null;
+    }
+
+    @Override
+    public Object get() {
+        Map<String, Object> out = new HashMap<>();
+        // Always sent explicitly (even when false) so "no task" is unambiguous on the wire,
+        // rather than the consumer having to infer it from missing fields.
+        out.put("hasTask", hasTask);
+        out.put("points", points);
+        out.put("streak", streak);
+
+        if (hasTask) {
+            out.put("masterName", masterName);
+            out.put("taskName", taskName);
+            out.put("taskLocation", taskLocation);
+            out.put("amountRemaining", amountRemaining);
+            out.put("initialAmount", initialAmount);
+        }
+
+        return out;
+    }
+
+    @Override
+    public String whoOwnsThis() {
+        return playerName;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) return true;
+        if (!(o instanceof SlayerTaskState)) return false;
+
+        SlayerTaskState other = (SlayerTaskState) o;
+        return hasTask == other.hasTask
+                && amountRemaining == other.amountRemaining
+                && initialAmount == other.initialAmount
+                && points == other.points
+                && streak == other.streak
+                && Objects.equals(masterName, other.masterName)
+                && Objects.equals(taskName, other.taskName)
+                && Objects.equals(taskLocation, other.taskLocation);
+    }
+}

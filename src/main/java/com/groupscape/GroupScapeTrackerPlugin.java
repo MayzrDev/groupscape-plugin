@@ -38,6 +38,7 @@ import net.runelite.api.events.*;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.WorldView;
 import net.runelite.client.callback.ClientThread;
@@ -154,6 +155,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private PendingDeathCandidate pendingDeathCandidate;
     private int pendingDeathConfirmTicks;
     private boolean dialogueEventEmitted = false;
+    /**
+     * Last NPC name shown in an open dialogue box (left-hand "chathead speaking" widget), kept
+     * updated for as long as that widget stays visible - see
+     * {@link #captureSlayerTaskMasterDialogue}. Unlike {@link NpcDialogueTracker} (which also
+     * updates on plain combat interaction, not just dialogue) this is only ever set while an
+     * actual NPC dialogue box is on screen, so it's a reliable source for "who was I just talking
+     * to" at the exact moment a slayer task gets assigned.
+     */
+    private String lastDialogNpcName;
+    /** Snapshotted from {@link #lastDialogNpcName} whenever a new slayer task is detected; see
+     * {@link #checkSlayerTaskUpdate}. Persists across ticks until the next task change - there is
+     * no varp/varbit that names the assigning master directly. */
+    private String currentSlayerTaskMaster;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
@@ -471,6 +485,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getQuests().update(new QuestState(playerName, client));
         dataManager.getAchievementDiary().update(new AchievementDiaryState(playerName, client));
         dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
+        // Backstop for the reactive push in checkSlayerTaskUpdate() - covers the case where the
+        // plugin/client (re)started mid-task, so nothing has fired a SLAYER_TARGET/etc varp change
+        // yet. DataState#update() dedupes via SlayerTaskState#equals(), so this is a harmless no-op
+        // most of the time.
+        dataManager.getSlayerTask().update(new SlayerTaskState(playerName, client, currentSlayerTaskMaster));
     }
 
     @Schedule(
@@ -494,6 +513,65 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (potionStoreVars != null && potionStoreVars.contains(varpId)) {
             cachePotions = true;
         }
+
+        checkSlayerTaskUpdate(varpId, event.getVarbitId());
+    }
+
+    /** varps: task id/amounts/area, plus Mortimer's separate streak counter (itself a varp). */
+    private static final int[] SLAYER_TASK_VARPS = {
+            VarPlayerID.SLAYER_TARGET,
+            VarPlayerID.SLAYER_COUNT,
+            VarPlayerID.SLAYER_COUNT_ORIGINAL,
+            VarPlayerID.SLAYER_AREA,
+            VarPlayerID.SLAYER_MORTIMER_TASKS_COMPLETED,
+    };
+    /** varbits: points, master ordinal (picks which streak counter applies), and the two
+     * non-Mortimer streak counters. */
+    private static final int[] SLAYER_TASK_VARBITS = {
+            VarbitID.SLAYER_POINTS,
+            VarbitID.SLAYER_MASTER,
+            VarbitID.SLAYER_TASKS_COMPLETED,
+            VarbitID.SLAYER_WILDERNESS_TASKS_COMPLETED,
+    };
+
+    /**
+     * Slayer task fields are pushed reactively (rather than on the infrequent 60s schedule like
+     * combat achievements/quests, see {@link #updateThingsThatDoNotChangeOften}) since a task
+     * change is a meaningful, low-frequency event the sidepanel/website should reflect right away,
+     * not up to a minute late. {@link DataState#update} already dedupes via
+     * {@link SlayerTaskState#equals}, so it's harmless to rebuild+push on every candidate
+     * varp/varbit change even though most of them won't actually differ from the last pushed state.
+     */
+    private void checkSlayerTaskUpdate(int varpId, int varbitId) {
+        boolean isNewTask = varpId == VarPlayerID.SLAYER_TARGET || varpId == VarPlayerID.SLAYER_COUNT_ORIGINAL;
+
+        boolean relevant = isNewTask;
+        if (!relevant) {
+            for (int v : SLAYER_TASK_VARPS) {
+                if (varpId == v) {
+                    relevant = true;
+                    break;
+                }
+            }
+        }
+        if (!relevant) {
+            for (int v : SLAYER_TASK_VARBITS) {
+                if (varbitId == v) {
+                    relevant = true;
+                    break;
+                }
+            }
+        }
+        if (!relevant) return;
+
+        if (isNewTask && lastDialogNpcName != null) {
+            currentSlayerTaskMaster = lastDialogNpcName;
+        }
+
+        Player local = client.getLocalPlayer();
+        if (local == null || local.getName() == null) return;
+
+        dataManager.getSlayerTask().update(new SlayerTaskState(local.getName(), client, currentSlayerTaskMaster));
     }
 
     @Subscribe
@@ -1320,6 +1398,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
             return;
         }
 
+        captureSlayerTaskMasterDialogue();
+
         Integer npcId = tracker.lastNpcId();
         if (npcId == null || dialogueEventEmitted) return;
 
@@ -1329,6 +1409,23 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getInteractionEvents().onDialogue(player.getName(), npcId, tracker.lastNpcName(), tracker.lastCombatLevel(),
                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
         dialogueEventEmitted = true;
+    }
+
+    /**
+     * Captures whichever NPC is currently "speaking" in the left-hand dialogue box into
+     * {@link #lastDialogNpcName}, for as long as that widget stays open. This is the only signal
+     * available for naming a slayer task's assigning master - see {@link SlayerTaskState}'s
+     * javadoc for why no varp/varbit/DB row can do it directly. Consumed (not read live) by
+     * {@link #checkSlayerTaskUpdate} at the moment a task actually changes.
+     */
+    private void captureSlayerTaskMasterDialogue() {
+        Widget nameWidget = client.getWidget(InterfaceID.ChatLeft.NAME);
+        if (nameWidget == null || nameWidget.isHidden() || nameWidget.getText() == null) return;
+
+        String name = Text.removeTags(nameWidget.getText()).trim();
+        if (!name.isEmpty()) {
+            lastDialogNpcName = name;
+        }
     }
 
     /**
