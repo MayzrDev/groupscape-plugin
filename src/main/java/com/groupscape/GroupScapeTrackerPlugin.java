@@ -1077,6 +1077,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * (die above 0hp), KQ/Vet'ion (mid-fight transforms), Amoxliatl (non-standard health bar).
      * Dual-NPC encounters (Dusk/Dawn, Eldric the Ice King/Verak Lith) aren't combined either -
      * each half despawning at 0 health fires its own kill event.
+     *
+     * The Hunllef (both Gauntlet variants) is a confirmed instance of that "non-standard health
+     * bar" gap - live testing showed its ratio never reads 0 here, at despawn or via any
+     * hitsplat beforehand, so this silently drops every Gauntlet kill (and, since the reward
+     * chest's loot is granted as this NPC's own {@code LootReceived} rather than a separate
+     * chest event - see {@link #onLootReceived} - the reward loot along with it, with nothing
+     * left to correlate it to). {@link #onChatMessage}'s {@code GAUNTLET_COMPLETE_PATTERN}
+     * handler works around it by synthesizing the kill straight from the "Your ... Gauntlet
+     * completion count is: N." line instead, the same way {@link RaidCompletionEvents} sidesteps
+     * unreliable despawn detection for CoX/ToA.
      */
     @Subscribe
     public void onNpcSpawned(NpcSpawned event) {
@@ -1125,6 +1135,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         Integer lastKnownRatio = npcHealthRatioByIndex.remove(npc.getIndex());
         boolean diedAtZeroHp = npc.getHealthRatio() == 0 || (lastKnownRatio != null && lastKnownRatio == 0);
         if (name == null || !diedAtZeroHp) return;
+        // The Hunllef is handled exclusively by onGauntletCompletion (see that method's javadoc) -
+        // falling through here too, on the rare chance diedAtZeroHp does fire for it, would double
+        // up the kill.
+        if ("Corrupted Hunllef".equals(name) || "Crystalline Hunllef".equals(name)) return;
 
         WorldPoint wp = npc.getWorldLocation();
         if (wp == null) return;
@@ -1217,6 +1231,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final Pattern KILL_COUNT_PATTERN = Pattern.compile(
             "^Your (?<boss>.+?) kill count is: (?<kc>[\\d,]+)\\.$");
 
+    /** e.g. "Your Corrupted Gauntlet completion count is: 21." / "Your Gauntlet completion count
+     * is: 8." - see the {@link #onNpcDespawned} javadoc for why the Hunllef needs this instead of
+     * ordinary despawn detection. */
+    private static final Pattern GAUNTLET_COMPLETE_PATTERN = Pattern.compile(
+            "^Your (?<corrupted>Corrupted )?Gauntlet completion count is: [\\d,]+\\.$");
+    private static final int CRYSTALLINE_HUNLLEF_NPC_ID = 9021;
+    private static final int CORRUPTED_HUNLLEF_NPC_ID = 9038;
+
     @Subscribe
     public void onChatMessage(ChatMessage event) {
         if (event.getType() != ChatMessageType.GAMEMESSAGE) return;
@@ -1236,11 +1258,36 @@ public class GroupScapeTrackerPlugin extends Plugin {
             return;
         }
 
+        Matcher gauntlet = GAUNTLET_COMPLETE_PATTERN.matcher(message);
+        if (gauntlet.find()) {
+            onGauntletCompletion(gauntlet.group("corrupted") != null);
+            return;
+        }
+
         Matcher kc = KILL_COUNT_PATTERN.matcher(message);
         if (kc.find()) {
             int accountKc = Integer.parseInt(kc.group("kc").replace(",", ""));
             dataManager.getKillLootDeathEvents().onKillCount(kc.group("boss"), accountKc);
         }
+    }
+
+    /**
+     * Synthesizes the Hunllef kill directly from the Gauntlet's completion chat line rather than
+     * waiting on {@link #onNpcDespawned}'s health-ratio check, which live testing showed never
+     * fires for either Hunllef variant. The reward chest's loot arrives moments later as this
+     * same NPC name's own {@code LootReceived} (see {@link #onLootReceived}), so it's able to
+     * correlate against this synthesized kill exactly as it would a normal despawn-detected one.
+     */
+    private void onGauntletCompletion(boolean corrupted) {
+        Player local = client.getLocalPlayer();
+        if (local == null || local.getName() == null) return;
+        WorldPoint wp = local.getWorldLocation();
+        if (wp == null) return;
+
+        String npcName = corrupted ? "Corrupted Hunllef" : "Crystalline Hunllef";
+        int npcId = corrupted ? CORRUPTED_HUNLLEF_NPC_ID : CRYSTALLINE_HUNLLEF_NPC_ID;
+        dataManager.getKillLootDeathEvents().onKill(
+                local.getName(), npcId, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
     }
 
     /**
