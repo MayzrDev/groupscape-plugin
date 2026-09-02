@@ -149,6 +149,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private volatile RosterMember localMember;
     private volatile GroupSnapshotMember localSnapshot;
     private int itemsDeposited = 0;
+    /** Number of ticks {@link #onActorDeath} waits before trusting the hitpoints stat; see its javadoc. */
+    private static final int DEATH_CONFIRM_TICKS = 2;
+    private PendingDeathCandidate pendingDeathCandidate;
+    private int pendingDeathConfirmTicks;
     private boolean dialogueEventEmitted = false;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
@@ -514,6 +518,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         --itemsDeposited;
         updateInteracting();
         checkWildernessEntry();
+        checkPendingDeathCandidate();
         if (groupWorldMapPoints != null) {
             groupWorldMapPoints.sync();
         }
@@ -1234,20 +1239,53 @@ public class GroupScapeTrackerPlugin extends Plugin {
      *
      * RuneLite's {@code ActorDeath} is driven off death animation IDs client-side and can fire
      * without an actual death (anim ID reuse, desync). Corroborate with the real hitpoints stat
-     * before reporting, since that's server-authoritative.
+     * before reporting, since that's server-authoritative. The hitpoints stat can lag the death
+     * animation by a tick (the killing blow's hitsplat and the ActorDeath event can land before
+     * the stat update is applied), so an instantaneous read here false-negatives on real deaths -
+     * defer the check a couple of ticks via {@link #onGameTick} instead of reading it inline.
      */
     @Subscribe
     public void onActorDeath(ActorDeath event) {
         Player local = client.getLocalPlayer();
         if (event.getActor() != local) return;
-        if (client.getBoostedSkillLevel(Skill.HITPOINTS) > 0) return;
 
         WorldPoint wp = local.getWorldLocation();
         if (wp == null) return;
 
         Actor interacting = local.getInteracting();
         String killerName = interacting != null ? interacting.getName() : null;
-        dataManager.getKillLootDeathEvents().onDeath(local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName);
+        pendingDeathCandidate = new PendingDeathCandidate(local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName);
+        pendingDeathConfirmTicks = DEATH_CONFIRM_TICKS;
+    }
+
+    private void checkPendingDeathCandidate() {
+        if (pendingDeathCandidate == null) return;
+        if (--pendingDeathConfirmTicks > 0) return;
+
+        PendingDeathCandidate candidate = pendingDeathCandidate;
+        pendingDeathCandidate = null;
+        if (client.getBoostedSkillLevel(Skill.HITPOINTS) > 0) return;
+
+        dataManager.getKillLootDeathEvents().onDeath(
+                candidate.playerName, candidate.x, candidate.y, candidate.plane, candidate.world, candidate.killerName);
+    }
+
+    private static final class PendingDeathCandidate {
+        final String playerName;
+        final int x;
+        final int y;
+        final int plane;
+        final int world;
+        final String killerName;
+
+        PendingDeathCandidate(String playerName, int x, int y, int plane, int world, String killerName) {
+            this.playerName = playerName;
+            this.x = x;
+            this.y = y;
+            this.plane = plane;
+            this.world = world;
+            this.killerName = killerName;
+        }
     }
 
     private void updateInteracting() {

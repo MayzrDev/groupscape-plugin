@@ -249,16 +249,20 @@ public class KillLootDeathEvents {
     public synchronized void consumeState(Map<String, Object> output) {
         if (pendingKills.isEmpty() && pendingDeaths.isEmpty() && pendingLoot.isEmpty()) return;
 
+        // If the owner doesn't match this flush's target, leave pending events untouched so
+        // they're retried on a later consumeState() call instead of being silently dropped -
+        // a mismatch here (e.g. a transient local-player-name hiccup around a death/teleport)
+        // used to fall through to the clear below with nothing ever attached to output.
         String whoIsUpdating = (String) output.get("name");
-        if (owner != null && owner.equals(whoIsUpdating)) {
-            List<Map<String, Object>> events = new ArrayList<>();
-            for (PendingKill kill : pendingKills) {
-                events.add(kill.toMap());
-            }
-            events.addAll(pendingDeaths);
-            events.addAll(pendingLoot);
-            output.put("events", events);
+        if (owner == null || !owner.equals(whoIsUpdating)) return;
+
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (PendingKill kill : pendingKills) {
+            events.add(kill.toMap());
         }
+        events.addAll(pendingDeaths);
+        events.addAll(pendingLoot);
+        output.put("events", events);
 
         consumedKills = pendingKills.isEmpty() ? null : new ArrayList<>(pendingKills);
         consumedDeaths = pendingDeaths.isEmpty() ? null : new ArrayList<>(pendingDeaths);
