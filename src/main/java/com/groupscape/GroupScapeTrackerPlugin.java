@@ -1121,9 +1121,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * inferred straight from the reward-chest {@code LootReceived} in {@link #onLootReceived}
      * instead - see {@link RaidCompletionEvents#onRaidChestLoot}).
      *
-     * TODO: the exact wording/casing below is modeled on the documented
-     * "Your completed X count is: N." family and has not been verified against a live completion
-     * message - confirm before release and adjust the patterns if the real strings differ.
+     * Wording/casing confirmed against live completion messages: regular and Challenge Mode CoX,
+     * and regular ToA (Expert Mode wording assumed by analogy, not yet confirmed live).
      */
     private static final Pattern COX_COMPLETE_PATTERN = Pattern.compile(
             "^Your completed Chambers of Xeric(?: (?<mode>Challenge Mode))? count is: [\\d,]+\\.$");
