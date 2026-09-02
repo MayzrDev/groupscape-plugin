@@ -47,14 +47,46 @@ public class RaidCompletionEventsTest {
     }
 
     @Test
-    public void chestLootWithNoMatchingChatSignalIsNotClaimed() {
+    public void chestLootWithNoMatchingChatSignalIsStillClaimedWithUnsetDifficulty() {
         RaidCompletionEvents events = new RaidCompletionEvents();
-        // No onChatCompletion("cox", ...) call this time.
+        // No onChatCompletion("cox", ...) call this time - chat line missed, expired, or the
+        // pattern failed to match a real completion message. Chest loot is still authoritative.
 
         boolean claimed = events.onRaidChestLoot(
                 "Woox", "Chambers of Xeric", 100, 200, 0, 301, emptyLoot());
 
-        assertFalse(claimed);
+        assertTrue(claimed);
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Woox");
+        events.consumeState(output);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> queued = (List<Map<String, Object>>) output.get("events");
+        assertEquals(1, queued.size());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> difficulty = (Map<String, Object>) queued.get(0).get("difficulty");
+        assertEquals("mode", difficulty.get("kind"));
+        assertFalse(difficulty.containsKey("mode"));
+    }
+
+    @Test
+    public void toaChestLootWithNoMatchingChatSignalHasUnresolvedLevel() {
+        RaidCompletionEvents events = new RaidCompletionEvents();
+
+        boolean claimed = events.onRaidChestLoot(
+                "Woox", "Tombs of Amascut", 100, 200, 0, 301, emptyLoot());
+
+        assertTrue(claimed);
+        Map<String, Object> output = new HashMap<>();
+        output.put("name", "Woox");
+        events.consumeState(output);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> queued = (List<Map<String, Object>>) output.get("events");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> difficulty = (Map<String, Object>) queued.get(0).get("difficulty");
+        assertEquals("level", difficulty.get("kind"));
+        assertFalse(difficulty.containsKey("level"));
     }
 
     @Test

@@ -12,13 +12,15 @@ import java.util.Map;
  * {@link GroupScapeTrackerPlugin#onLootReceived}) with the reward-chest loot that follows it, and
  * queues one "raid"-typed event per completion for the next upload.
  *
- * Mirrors {@link KillLootDeathEvents}'s pending-kill/unmatched-loot correlation shape: a chat
- * completion is held in {@link #pendingCox}/{@link #pendingToa} until a matching-name chest
- * {@code LootReceived} arrives within {@link #CORRELATION_WINDOW_MILLIS}, at which point the two
- * combine into one queued event. ToB has no chat signal at all, so its chest loot alone is the
- * completion. A chest loot that never gets a matching chat signal within the window (CoX/ToA) is
- * dropped rather than reported without a difficulty - same "best-effort, no completion shipped
- * without both halves" choice {@link KillLootDeathEvents} makes for kill+loot.
+ * The reward-chest {@code LootReceived} is the authoritative completion signal for all three raids
+ * (as it always was for ToB, which prints no chat line at all). For CoX/ToA, a chat completion
+ * line held in {@link #pendingCox}/{@link #pendingToa} is used only to enrich the event with a
+ * difficulty (CoX mode / ToA invocation level) when it arrives within
+ * {@link #CORRELATION_WINDOW_MILLIS} of the chest loot - if it doesn't (missed, expired, or the
+ * chat pattern fails to match a real completion line), the completion still ships, just with the
+ * difficulty left unset/unresolved. This mirrors {@link KillLootDeathEvents}'s pending-kill/loot
+ * correlation shape but deliberately does NOT drop the event when only one half shows up, since an
+ * unresolved difficulty is a much smaller loss than a raid vanishing from the feed entirely.
  *
  * Drains into the *same* "events" upload key {@link KillLootDeathEvents} owns, so unlike that
  * class this one only ever appends to whatever's already there rather than overwriting it -
@@ -56,7 +58,7 @@ public class RaidCompletionEvents {
                 if (mode != null) {
                     map.put("mode", mode);
                 }
-            } else {
+            } else if (level >= 0) {
                 map.put("level", level);
             }
             return map;
@@ -114,17 +116,19 @@ public class RaidCompletionEvents {
             // TODO: revisit if ToB Hard Mode distinction turns out to matter to users.
             raidType = "tob";
             difficulty = RaidDifficulty.mode(null);
-        } else if ("Chambers of Xeric".equals(sourceName) && pendingCox != null && pendingCox.isFresh()) {
+        } else if ("Chambers of Xeric".equals(sourceName)) {
             raidType = "cox";
-            difficulty = pendingCox.difficulty;
+            // Chat line is only used to enrich with mode when it landed in time - the chest loot
+            // itself is the authoritative completion signal (matches ToB), so a missed/unmatched
+            // chat line (e.g. an unexpected wording) no longer drops the completion, just its mode.
+            difficulty = (pendingCox != null && pendingCox.isFresh()) ? pendingCox.difficulty : RaidDifficulty.mode(null);
             pendingCox = null;
-        } else if ("Tombs of Amascut".equals(sourceName) && pendingToa != null && pendingToa.isFresh()) {
+        } else if ("Tombs of Amascut".equals(sourceName)) {
             raidType = "toa";
-            difficulty = pendingToa.difficulty;
+            difficulty = (pendingToa != null && pendingToa.isFresh()) ? pendingToa.difficulty : RaidDifficulty.level(-1);
             pendingToa = null;
         } else {
-            // Not a raid chest, or the chat signal never arrived (or expired) - not our loot to
-            // claim; caller falls back to its normal chest/notable-drop handling for this event.
+            // Not a raid chest - caller falls back to its normal chest/notable-drop handling.
             return false;
         }
 
