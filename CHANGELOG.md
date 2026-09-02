@@ -7,6 +7,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - Fixed Tombs of Amascut (and occasionally Chambers of Xeric) completions sometimes not appearing in the Activity Feed at all - the reward chest loot is now enough on its own to log the completion, instead of requiring an in-game chat message to line up with it first.
 - Internal: confirmed raid completion chat detection wording against real completion messages and removed a stale internal note about it being unverified.
+- Fixed collection log unlocks not syncing to your group until you next opened your collection log - new items now sync as soon as you get them.
 
 ## [1.8.5] - 2026-09-01
 
