@@ -25,13 +25,23 @@ public final class LocalRosterMemberFactory {
     }
 
     public static RosterMember build(Client client, NpcDialogueTracker dialogueTracker) {
+        return build(client, dialogueTracker, null);
+    }
+
+    /**
+     * @param rosterState if non-null, used to look up the local player's server-assigned color
+     * (the same admin-assigned helmet colour shown for every other member) instead of the
+     * placeholder gold fallback, since the local player's own row bypasses the roster otherwise.
+     */
+    public static RosterMember build(Client client, NpcDialogueTracker dialogueTracker, RosterState rosterState) {
         Player player = client.getLocalPlayer();
         if (player == null || player.getName() == null) {
             return null;
         }
 
         RosterMember self = new RosterMember(player.getName());
-        self.color = "#FFD700";
+        RosterMember known = rosterState != null ? rosterState.findByName(player.getName()) : null;
+        self.color = known != null ? known.color : "#FFD700";
         self.hp = client.getBoostedSkillLevel(Skill.HITPOINTS);
         self.maxHp = client.getRealSkillLevel(Skill.HITPOINTS);
         self.prayer = client.getBoostedSkillLevel(Skill.PRAYER);

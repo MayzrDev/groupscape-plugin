@@ -441,7 +441,7 @@ public class PartyFrameOverlay extends Overlay {
 
     /** Reads the local player's own vitals straight from Client, avoiding any WebSocket round-trip. */
     private RosterMember buildSelfRow(String name) {
-        return LocalRosterMemberFactory.build(client, dialogueTracker);
+        return LocalRosterMemberFactory.build(client, dialogueTracker, rosterState);
     }
 
     private void sortMembers(List<RosterMember> members) {

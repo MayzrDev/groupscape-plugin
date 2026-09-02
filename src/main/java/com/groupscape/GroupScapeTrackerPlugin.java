@@ -385,7 +385,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             localSnapshot = null;
             return;
         }
-        localMember = LocalRosterMemberFactory.build(client, dataManager.getNpcDialogueTracker());
+        localMember = LocalRosterMemberFactory.build(client, dataManager.getNpcDialogueTracker(), rosterState);
         localSnapshot = LocalGroupSnapshotFactory.build(client);
     }
 
