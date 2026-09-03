@@ -96,10 +96,19 @@ public class CollectionLogWidgetSubscriber {
         collectionLogV2Manager.storeClogItem(itemId, 1);
     }
 
+    // The unlock chat line and ItemManager's search index don't always agree on which apostrophe
+    // character a name uses (e.g. "Beekeeper's gloves" vs "Beekeeper's gloves") - a straight
+    // equalsIgnoreCase between them then never matches and the drop is silently lost. Normalize
+    // every apostrophe-like codepoint to a single character before comparing.
+    private static String normalizeApostrophes(String name) {
+        return name.replaceAll("[‘’ʼ´`]", "'");
+    }
+
     private int resolveItemId(String itemName) {
         List<ItemPrice> matches = itemManager.search(itemName);
+        String normalizedTarget = normalizeApostrophes(itemName);
         for (ItemPrice match : matches) {
-            if (match.getName().equalsIgnoreCase(itemName)) {
+            if (normalizeApostrophes(match.getName()).equalsIgnoreCase(normalizedTarget)) {
                 return match.getId();
             }
         }

@@ -8,6 +8,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Combat achievement progress no longer waits up to a minute (or a relog) to sync to the site - it now updates the moment you complete a task or tier, and also refreshes whenever you open your Combat Achievements log.
 - Your slayer task's assigning master no longer gets stuck showing as unknown after a client restart mid-task - talking to (or rechecking with) a slayer master now refreshes it right away.
 - Boss slayer tasks (Leviathan, Whisperer, Vardorvis, Duke Sucellus) now show the actual boss name to your group instead of just "Boss".
+- Collection log items whose name contains an apostrophe (e.g. Beekeeper's gloves) could fail to sync the moment you got them and only show up after you next opened your collection log - fixed a mismatched apostrophe character breaking the item name lookup.
 
 ## [1.8.6] - 2026-09-02
 
