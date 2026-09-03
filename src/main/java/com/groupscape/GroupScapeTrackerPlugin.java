@@ -1284,7 +1284,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             List<Map<String, Object>> items = new ArrayList<>();
             for (ItemStack item : event.getItems()) {
                 Map<String, Object> entry = new HashMap<>();
-                entry.put("itemId", item.getId());
+                entry.put("itemId", itemManager.canonicalize(item.getId()));
                 entry.put("quantity", item.getQuantity());
                 items.add(entry);
             }
@@ -1302,7 +1302,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                     List<Map<String, Object>> items = new ArrayList<>();
                     for (ItemStack item : event.getItems()) {
                         Map<String, Object> entry = new HashMap<>();
-                        entry.put("itemId", item.getId());
+                        entry.put("itemId", itemManager.canonicalize(item.getId()));
                         entry.put("quantity", item.getQuantity());
                         items.add(entry);
                     }
@@ -1459,7 +1459,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         ItemStack highlight = null;
         long highlightValue = -1;
         for (ItemStack item : items) {
-            long value = (long) itemManager.getItemPrice(item.getId()) * item.getQuantity();
+            long value = (long) itemManager.getItemPrice(itemManager.canonicalize(item.getId())) * item.getQuantity();
             totalValue += value;
             if (value > highlightValue) {
                 highlightValue = value;

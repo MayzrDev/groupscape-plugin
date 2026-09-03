@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.9] - 2026-09-03
+
+### Fixed
+- Drops received as a "noted" stack (e.g. a bulk pile of gems) no longer show up in the Activity Feed and Discord as an unrecognized "item #____ (untradeable)" - they now show the correct item name, link, and gp value just like the unnoted version.
+
 ## [1.8.8] - 2026-09-03
 
 ### Fixed
