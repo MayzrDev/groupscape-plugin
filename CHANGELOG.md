@@ -18,6 +18,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Scoreboard's member initials now actually render bold - the font-weight flag alone wasn't visibly bolding the game's pixel font.
 - New collection log items unlocked in the middle of a session (especially untradeable ones) could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now identifies the unlocked item directly from your inventory instead of relying on a Grand Exchange price lookup that doesn't cover every item.
 - Party overlay text (member names, bar labels/values) no longer overlaps itself in Compact and Super Compact scale - font size and text position now scale properly with the tighter row heights instead of overflowing them.
+- Talking to Mortimer, Aya, Achtryn, or Kuradal no longer fails to update your tracked slayer master - the plugin wasn't recognizing them as slayer masters yet.
 
 ## [1.8.9] - 2026-09-03
 

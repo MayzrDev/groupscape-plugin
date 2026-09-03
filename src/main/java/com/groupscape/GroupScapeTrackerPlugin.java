@@ -541,7 +541,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * refreshed immediately, see {@link #captureSlayerTaskMasterDialogue}. */
     private static final Set<String> SLAYER_MASTER_NAMES = Set.of(
             "turael", "spria", "mazchna", "vannaka", "chaeldar", "nieve", "steve", "duradel",
-            "konar quo maten", "krystilia"
+            "konar quo maten", "krystilia", "mortimer", "aya", "achtryn", "kuradal"
     );
 
     /** varps: task id/amounts/area, plus Mortimer's separate streak counter (itself a varp). */
