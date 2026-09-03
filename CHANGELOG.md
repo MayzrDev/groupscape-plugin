@@ -4,8 +4,20 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ## [1.8.10] - 2026-09-03
 
+### Added
+- New party overlay Layout option: Orb Grid, which shows each group member as a circular HP orb (with Prayer/Run/Spec pips and a target indicator) tiled in a grid instead of a list of bars. The panel now sizes itself to however many members you have instead of always taking up a fixed width.
+- New party overlay Layout option: Scoreboard, which lays members out as side-by-side vertical HP meters (like a raid frame turned sideways) instead of a list - handy for a wide, short strip along the top of the screen during boss fights.
+
+### Changed
+- The party overlay's "Scale" setting is now called "Layout", since most of its options change the whole arrangement, not just the size. Your existing choice is preserved.
+- Orb Grid: bolder, better-spaced Prayer/Run/Spec pips around each orb.
+- Scoreboard: sized up about a third, with a larger, bolder name label.
+
 ### Fixed
+- Orb Grid's Prayer/Run/Spec pips no longer spill outside the panel's bottom edge - padding and row spacing now account for how far the bigger pips hang off each orb.
+- Scoreboard's member initials now actually render bold - the font-weight flag alone wasn't visibly bolding the game's pixel font.
 - New collection log items unlocked in the middle of a session (especially untradeable ones) could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now identifies the unlocked item directly from your inventory instead of relying on a Grand Exchange price lookup that doesn't cover every item.
+- Party overlay text (member names, bar labels/values) no longer overlaps itself in Compact and Super Compact scale - font size and text position now scale properly with the tighter row heights instead of overflowing them.
 
 ## [1.8.9] - 2026-09-03
 

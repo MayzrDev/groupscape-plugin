@@ -251,13 +251,18 @@ public interface GroupScapeTrackerConfig extends Config {
         NORMAL,
         COMPACT,
         SUPER_COMPACT,
-        MINIMAL
+        MINIMAL,
+        ORB_GRID,
+        SCOREBOARD
     }
 
+    // Renamed from "Scale" to "Layout" since every tier past Compact/Super Compact picks a
+    // different visual arrangement, not just a size - keyName is unchanged so no one's saved
+    // choice resets.
     @ConfigItem(
             keyName = "partyOverlayScale",
-            name = "Scale",
-            description = "Compact/Super compact tighten row/bar spacing; Minimal fuses HP/Prayer/Run/Spec into one bar strip",
+            name = "Layout",
+            description = "Compact/Super compact tighten row/bar spacing; Minimal fuses HP/Prayer/Run/Spec into one bar strip; Orb grid tiles members as HP orbs; Scoreboard lays them out as side-by-side vertical HP meters",
             section = partyOverlaySection,
             position = 17
     )

@@ -9,6 +9,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.BasicStroke;
+import java.awt.geom.Arc2D;
 import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -79,6 +81,45 @@ public class PartyFrameOverlay extends Overlay {
     private static final int MINIMAL_PRAYER_ICON_ROW_HEIGHT = MINIMAL_PRAYER_ICON_SIZE + 1;
     private static final int MINIMAL_TARGET_STRIP_HEIGHT = 4;
     private static final int MINIMAL_CLUSTER_SEGMENT_GAP = 2;
+
+    // Orb Grid drops the row layout entirely: members tile as circular status orbs in a wrapping
+    // grid instead of stacking, so it doesn't share the padding/lineHeight/barHeight fields above -
+    // see renderOrbGrid/drawOrb. Unlike every other tier it doesn't render at the fixed
+    // PANEL_WIDTH either: the panel is only as wide as it needs to be for up to ORB_MAX_COLS
+    // orbs, and wraps into a new row past that, instead of always claiming the full row width.
+    private static final int ORB_SIZE = 40;
+    private static final int ORB_MAX_COLS = 5;
+    private static final int ORB_FOOTER_HEIGHT = 16;
+    private static final Color ORB_TARGET_ENEMY = new Color(164, 22, 35);
+    private static final Color ORB_TARGET_NEUTRAL = new Color(140, 98, 18);
+    private static final Color ORB_INITIALS_COLOR = new Color(36, 28, 15);
+    private static final int ORB_PIP_RADIUS = 3;
+    private static final int ORB_PIP_GAP = 5;
+    // How far a pip's outer edge sits past the orb's own radius - the pips hang off the bottom of
+    // the ring, not inside it, so padding/row-gap both need to clear this or they overflow the
+    // panel/collide with the next row instead of just the orb's footprint.
+    private static final int ORB_PIP_OVERHANG = ORB_PIP_GAP + ORB_PIP_RADIUS * 2;
+    private static final int ORB_PADDING = ORB_PIP_OVERHANG + 1;
+    private static final int ORB_GAP = ORB_PIP_OVERHANG + 1;
+
+    // Scoreboard turns the panel sideways: members sit in narrow side-by-side columns instead of
+    // stacked rows or a 2D grid, each a vertical HP meter with a tally-pip row and initials below
+    // it - see renderScoreboard/drawScoreColumn. Like Orb Grid, panel size follows content instead
+    // of the fixed PANEL_WIDTH.
+    // Base dimensions scaled up 33% from the originally-approved mockup size.
+    private static final int SCOREBOARD_PADDING = 11;
+    private static final int SCOREBOARD_COL_WIDTH = 27;
+    private static final int SCOREBOARD_GAP = 7;
+    private static final int SCOREBOARD_BAR_WIDTH = 19;
+    private static final int SCOREBOARD_BAR_HEIGHT = 69;
+    private static final int SCOREBOARD_PIP_SIZE = 7;
+    private static final int SCOREBOARD_PIP_H_GAP = 3;
+    private static final int SCOREBOARD_PIP_ROW_GAP = 4;
+    private static final int SCOREBOARD_LABEL_GAP = 13;
+    private static final int SCOREBOARD_TARGET_HEADROOM = 8;
+    private static final int SCOREBOARD_MAX_COLS = 8;
+    // Label font: base 8f x1.33 (matches the geometry scale-up) x1.10 (extra legibility pass).
+    private static final float SCOREBOARD_FONT_SIZE = 8f * 1.33f * 1.10f;
 
     private static final int PRAYER_ICON_GAP = 2;
 
@@ -257,7 +298,14 @@ public class PartyFrameOverlay extends Overlay {
             members = members.subList(0, maxMembers);
         }
 
-        graphics.setFont(scaledFont());
+        if (isOrbGrid()) {
+            return renderOrbGrid(graphics, members, localPlayer.getName(), extraCount);
+        }
+        if (isScoreboard()) {
+            return renderScoreboard(graphics, members, localPlayer.getName(), extraCount);
+        }
+
+        graphics.setFont(scaledFont(graphics));
 
         Map<RosterMember, Boolean> offlineByMember = new LinkedHashMap<>();
         for (RosterMember member : members) {
@@ -290,10 +338,297 @@ public class PartyFrameOverlay extends Overlay {
 
         if (extraCount > 0) {
             graphics.setColor(MUTED_TEXT);
-            graphics.drawString("+" + extraCount + " more", padding + 6, y + 10);
+            FontMetrics footerMetrics = graphics.getFontMetrics();
+            int footerBaseline = y + (lineHeight + footerMetrics.getAscent() - footerMetrics.getDescent()) / 2;
+            graphics.drawString("+" + extraCount + " more", padding + 6, footerBaseline);
         }
 
         return new Dimension(PANEL_WIDTH, height);
+    }
+
+    /**
+     * Orb Grid's render path: members tile as circular status orbs left-to-right, wrapping into
+     * new rows, instead of stacking as labeled bar rows. Mirrors render()'s general shape (compute
+     * height, draw chrome, draw members, record hit rects, draw overflow footer) but the geometry
+     * is grid math instead of row math, so it doesn't share applyScale()'s padding/lineHeight/etc.
+     */
+    private Dimension renderOrbGrid(Graphics2D graphics, List<RosterMember> members, String localPlayerName, int extraCount) {
+        int cols = Math.max(1, Math.min(ORB_MAX_COLS, members.size()));
+        int rows = (int) Math.ceil(members.size() / (double) cols);
+        int width = ORB_PADDING * 2 + cols * (ORB_SIZE + ORB_GAP) - ORB_GAP;
+        int gridHeight = rows * (ORB_SIZE + ORB_GAP) - ORB_GAP;
+        int footerHeight = extraCount > 0 ? ORB_FOOTER_HEIGHT : 0;
+        int height = ORB_PADDING * 2 + gridHeight + footerHeight;
+
+        drawChrome(graphics, width, height);
+        graphics.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, ORB_SIZE * 0.28f));
+
+        lastRenderedRows.clear();
+        for (int i = 0; i < members.size(); i++) {
+            RosterMember member = members.get(i);
+            boolean self = member.name.equalsIgnoreCase(localPlayerName);
+            boolean offline = !self && isOffline(member);
+            boolean outOfVicinity = !self && !offline && config.partyOverlayFadeOutOfVicinity()
+                    && !withinVicinity(member, config.partyOverlayVicinityFadeTiles());
+
+            int col = i % cols;
+            int row = i / cols;
+            int cx = ORB_PADDING + col * (ORB_SIZE + ORB_GAP) + ORB_SIZE / 2;
+            int cy = ORB_PADDING + row * (ORB_SIZE + ORB_GAP) + ORB_SIZE / 2;
+
+            drawOrb(graphics, cx, cy, member, offline, offline || outOfVicinity);
+            lastRenderedRows.put(new Rectangle(cx - ORB_SIZE / 2, cy - ORB_SIZE / 2, ORB_SIZE, ORB_SIZE), member);
+        }
+
+        if (extraCount > 0) {
+            graphics.setColor(MUTED_TEXT);
+            FontMetrics metrics = graphics.getFontMetrics();
+            int footerY = ORB_PADDING + gridHeight + (footerHeight + metrics.getAscent() - metrics.getDescent()) / 2;
+            graphics.drawString("+" + extraCount + " more", ORB_PADDING, footerY);
+        }
+
+        return new Dimension(width, height);
+    }
+
+    /**
+     * One member's orb: an HP-ratio ring (track when hidden/empty, filled clockwise from the top
+     * otherwise), a color-filled core with 2-letter initials, three tick pips for Prayer/Run/Spec
+     * lit proportionally to their ratio, and a target badge - each piece skipped per its own
+     * partyOverlayHideX() toggle. Offline members render track-only/desaturated with no pips or
+     * badge, matching the grayscale-and-fade convention the row tiers already use for offline.
+     */
+    private void drawOrb(Graphics2D graphics, int cx, int cy, RosterMember member, boolean offline, boolean faded) {
+        java.awt.Composite originalComposite = graphics.getComposite();
+        if (faded) {
+            graphics.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, OFFLINE_ALPHA));
+        }
+
+        float ringStroke = ORB_SIZE * 0.09f;
+        float ringR = ORB_SIZE / 2f - ringStroke / 2f;
+        Object previousStroke = graphics.getStroke();
+        graphics.setStroke(new BasicStroke(ringStroke));
+
+        graphics.setColor(TRACK_COLOR);
+        graphics.draw(new Arc2D.Double(cx - ringR, cy - ringR, ringR * 2, ringR * 2, 0, 360, Arc2D.OPEN));
+
+        if (!offline && !config.partyOverlayHideHp()) {
+            double hpRatio = ratio(member.hp, member.maxHp);
+            graphics.setColor(HP_COLOR);
+            graphics.draw(new Arc2D.Double(cx - ringR, cy - ringR, ringR * 2, ringR * 2, 90, -360 * hpRatio, Arc2D.OPEN));
+        }
+        graphics.setStroke((java.awt.Stroke) previousStroke);
+
+        int coreR = Math.round(ORB_SIZE / 2f - ringStroke * 2f);
+        Color coreColor = offline ? toGrayscale(memberColor(member.color)) : memberColor(member.color);
+        graphics.setColor(coreColor);
+        graphics.fillOval(cx - coreR, cy - coreR, coreR * 2, coreR * 2);
+
+        String initials = member.name.length() >= 2 ? member.name.substring(0, 2).toUpperCase() : member.name.toUpperCase();
+        graphics.setColor(ORB_INITIALS_COLOR);
+        FontMetrics metrics = graphics.getFontMetrics();
+        float textX = cx - metrics.stringWidth(initials) / 2f;
+        float textY = cy + (metrics.getAscent() - metrics.getDescent()) / 2f;
+        graphics.drawString(initials, textX, textY);
+
+        if (!offline) {
+            drawOrbPips(graphics, cx, cy, member, faded ? OFFLINE_ALPHA : 1f);
+
+            if (!config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
+                boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
+                double bx = cx + ORB_SIZE / 2.0 * 0.72;
+                double by = cy - ORB_SIZE / 2.0 * 0.72;
+                graphics.setColor(isEnemy ? ORB_TARGET_ENEMY : ORB_TARGET_NEUTRAL);
+                graphics.fillOval((int) bx - 3, (int) by - 3, 6, 6);
+                graphics.setColor(BG_BASE);
+                graphics.drawOval((int) bx - 3, (int) by - 3, 6, 6);
+            }
+        }
+
+        if (faded) {
+            graphics.setComposite(originalComposite);
+        }
+    }
+
+    /** The three Prayer/Run/Spec pips along an orb's bottom arc, each drawn only if its metric isn't hidden. */
+    private void drawOrbPips(Graphics2D graphics, int cx, int cy, RosterMember member, float outerAlpha) {
+        List<Color> colors = new ArrayList<>(3);
+        List<Double> ratios = new ArrayList<>(3);
+        if (!config.partyOverlayHidePrayer()) {
+            colors.add(PRAYER_COLOR);
+            ratios.add(ratio(member.prayer, member.maxPrayer));
+        }
+        if (!config.partyOverlayHideRun()) {
+            colors.add(RUN_COLOR);
+            ratios.add(ratio(member.runEnergy, 100));
+        }
+        if (!config.partyOverlayHideSpec()) {
+            colors.add(SPEC_COLOR);
+            ratios.add(ratio(member.specEnergy, 100));
+        }
+        if (colors.isEmpty()) {
+            return;
+        }
+
+        double baseAngle = Math.PI / 2;
+        double spread = 0.75;
+        double pipR = ORB_SIZE / 2.0 + ORB_PIP_GAP + ORB_PIP_RADIUS;
+        for (int i = 0; i < colors.size(); i++) {
+            double angle = colors.size() == 1 ? baseAngle
+                    : baseAngle - spread / 2 + spread * (i / (double) (colors.size() - 1));
+            int px = (int) Math.round(cx + Math.cos(angle) * pipR);
+            int py = (int) Math.round(cy + Math.sin(angle) * pipR);
+
+            graphics.setColor(TRACK_COLOR);
+            graphics.fillOval(px - ORB_PIP_RADIUS, py - ORB_PIP_RADIUS, ORB_PIP_RADIUS * 2, ORB_PIP_RADIUS * 2);
+
+            double r = ratios.get(i);
+            if (r > 0.05) {
+                float alpha = (float) Math.max(0.35, r) * outerAlpha;
+                java.awt.Composite pipComposite = graphics.getComposite();
+                graphics.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, alpha));
+                graphics.setColor(colors.get(i));
+                graphics.fillOval(px - ORB_PIP_RADIUS, py - ORB_PIP_RADIUS, ORB_PIP_RADIUS * 2, ORB_PIP_RADIUS * 2);
+                graphics.setComposite(pipComposite);
+            }
+        }
+    }
+
+    /**
+     * Scoreboard's render path: members sit in narrow side-by-side columns, wrapping into a new
+     * strip below past SCOREBOARD_MAX_COLS, instead of stacking as rows or tiling as a 2D grid.
+     * Mirrors renderOrbGrid's shape (content-sized panel, draw chrome, draw members, record hit
+     * rects, draw overflow footer).
+     */
+    private Dimension renderScoreboard(Graphics2D graphics, List<RosterMember> members, String localPlayerName, int extraCount) {
+        int cols = Math.max(1, Math.min(SCOREBOARD_MAX_COLS, members.size()));
+        int rows = (int) Math.ceil(members.size() / (double) cols);
+        int stripHeight = SCOREBOARD_BAR_HEIGHT + SCOREBOARD_PIP_ROW_GAP + SCOREBOARD_PIP_SIZE + SCOREBOARD_LABEL_GAP + 8;
+        int width = SCOREBOARD_PADDING * 2 + cols * (SCOREBOARD_COL_WIDTH + SCOREBOARD_GAP) - SCOREBOARD_GAP;
+        int gridHeight = rows * (stripHeight + SCOREBOARD_GAP) - SCOREBOARD_GAP + SCOREBOARD_TARGET_HEADROOM;
+        int footerHeight = extraCount > 0 ? ORB_FOOTER_HEIGHT : 0;
+        int height = SCOREBOARD_PADDING * 2 + gridHeight + footerHeight;
+
+        drawChrome(graphics, width, height);
+        graphics.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, SCOREBOARD_FONT_SIZE));
+
+        lastRenderedRows.clear();
+        for (int i = 0; i < members.size(); i++) {
+            RosterMember member = members.get(i);
+            boolean self = member.name.equalsIgnoreCase(localPlayerName);
+            boolean offline = !self && isOffline(member);
+            boolean outOfVicinity = !self && !offline && config.partyOverlayFadeOutOfVicinity()
+                    && !withinVicinity(member, config.partyOverlayVicinityFadeTiles());
+
+            int col = i % cols;
+            int row = i / cols;
+            int x = SCOREBOARD_PADDING + col * (SCOREBOARD_COL_WIDTH + SCOREBOARD_GAP);
+            int y = SCOREBOARD_PADDING + row * (stripHeight + SCOREBOARD_GAP) + SCOREBOARD_TARGET_HEADROOM;
+
+            drawScoreColumn(graphics, x, y, member, offline, offline || outOfVicinity);
+            lastRenderedRows.put(new Rectangle(x, y - SCOREBOARD_TARGET_HEADROOM, SCOREBOARD_COL_WIDTH, stripHeight + SCOREBOARD_TARGET_HEADROOM), member);
+        }
+
+        if (extraCount > 0) {
+            graphics.setColor(MUTED_TEXT);
+            FontMetrics metrics = graphics.getFontMetrics();
+            int footerY = SCOREBOARD_PADDING + gridHeight + (footerHeight + metrics.getAscent() - metrics.getDescent()) / 2;
+            graphics.drawString("+" + extraCount + " more", SCOREBOARD_PADDING, footerY);
+        }
+
+        return new Dimension(width, height);
+    }
+
+    /**
+     * One member's column: an optional target-flag triangle above the bar, a vertical HP meter
+     * (the one thing meant to read at a glance from across the screen), a row of Prayer/Run/Spec
+     * tally pips, and initials below - each piece skipped per its own partyOverlayHideX() toggle.
+     * Offline columns show the HP track only, dimmed grayscale initials, and no pips or flag.
+     */
+    private void drawScoreColumn(Graphics2D graphics, int x, int y, RosterMember member, boolean offline, boolean faded) {
+        java.awt.Composite originalComposite = graphics.getComposite();
+        if (faded) {
+            graphics.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, OFFLINE_ALPHA));
+        }
+
+        int barX = x + (SCOREBOARD_COL_WIDTH - SCOREBOARD_BAR_WIDTH) / 2;
+
+        if (!offline && !config.partyOverlayHideTarget() && member.targetName != null && !member.targetName.isEmpty()) {
+            boolean isEnemy = member.targetHealthScale != null && member.targetHealthScale > 0;
+            int midX = x + SCOREBOARD_COL_WIDTH / 2;
+            int[] xs = {midX, midX - 4, midX + 4};
+            int[] ys = {y - 6, y - 1, y - 1};
+            graphics.setColor(isEnemy ? ORB_TARGET_ENEMY : ORB_TARGET_NEUTRAL);
+            graphics.fillPolygon(xs, ys, 3);
+        }
+
+        java.awt.geom.RoundRectangle2D.Float track = new java.awt.geom.RoundRectangle2D.Float(
+                barX, y, SCOREBOARD_BAR_WIDTH, SCOREBOARD_BAR_HEIGHT, 6, 6);
+        graphics.setColor(TRACK_COLOR);
+        graphics.fill(track);
+
+        if (!offline && !config.partyOverlayHideHp()) {
+            double hpRatio = ratio(member.hp, member.maxHp);
+            int fillHeight = (int) Math.round(SCOREBOARD_BAR_HEIGHT * hpRatio);
+            Object previousClip = graphics.getClip();
+            graphics.clip(track);
+            graphics.setColor(HP_COLOR);
+            graphics.fillRect(barX, y + SCOREBOARD_BAR_HEIGHT - fillHeight, SCOREBOARD_BAR_WIDTH, fillHeight);
+            graphics.setClip((java.awt.Shape) previousClip);
+        }
+
+        int py = y + SCOREBOARD_BAR_HEIGHT + SCOREBOARD_PIP_ROW_GAP;
+        if (!offline) {
+            drawScorePips(graphics, x, py, member, faded ? OFFLINE_ALPHA : 1f);
+        }
+
+        int labelY = py + SCOREBOARD_PIP_SIZE + SCOREBOARD_LABEL_GAP;
+        FontMetrics metrics = graphics.getFontMetrics();
+        String initials = member.name.length() >= 2 ? member.name.substring(0, 2).toUpperCase() : member.name.toUpperCase();
+        graphics.setColor(offline ? toGrayscale(memberColor(member.color)) : memberColor(member.color));
+        drawBoldString(graphics, initials, x + (SCOREBOARD_COL_WIDTH - metrics.stringWidth(initials)) / 2f, labelY);
+
+        if (faded) {
+            graphics.setComposite(originalComposite);
+        }
+    }
+
+    /** The Prayer/Run/Spec tally pips under a scoreboard column's HP bar, each skipped if its metric is hidden. */
+    private void drawScorePips(Graphics2D graphics, int columnX, int y, RosterMember member, float outerAlpha) {
+        List<Color> colors = new ArrayList<>(3);
+        List<Double> ratios = new ArrayList<>(3);
+        if (!config.partyOverlayHidePrayer()) {
+            colors.add(PRAYER_COLOR);
+            ratios.add(ratio(member.prayer, member.maxPrayer));
+        }
+        if (!config.partyOverlayHideRun()) {
+            colors.add(RUN_COLOR);
+            ratios.add(ratio(member.runEnergy, 100));
+        }
+        if (!config.partyOverlayHideSpec()) {
+            colors.add(SPEC_COLOR);
+            ratios.add(ratio(member.specEnergy, 100));
+        }
+        if (colors.isEmpty()) {
+            return;
+        }
+
+        int totalWidth = colors.size() * SCOREBOARD_PIP_SIZE + (colors.size() - 1) * SCOREBOARD_PIP_H_GAP;
+        int px = columnX + (SCOREBOARD_COL_WIDTH - totalWidth) / 2;
+        for (int i = 0; i < colors.size(); i++) {
+            graphics.setColor(TRACK_COLOR);
+            graphics.fillRect(px, y, SCOREBOARD_PIP_SIZE, SCOREBOARD_PIP_SIZE);
+
+            double r = ratios.get(i);
+            if (r > 0.05) {
+                float alpha = (float) Math.max(0.35, r) * outerAlpha;
+                java.awt.Composite pipComposite = graphics.getComposite();
+                graphics.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, alpha));
+                graphics.setColor(colors.get(i));
+                graphics.fillRect(px, y, SCOREBOARD_PIP_SIZE, SCOREBOARD_PIP_SIZE);
+                graphics.setComposite(pipComposite);
+            }
+            px += SCOREBOARD_PIP_SIZE + SCOREBOARD_PIP_H_GAP;
+        }
     }
 
     /**
@@ -368,22 +703,39 @@ public class PartyFrameOverlay extends Overlay {
         return config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.MINIMAL;
     }
 
+    private boolean isOrbGrid() {
+        return config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.ORB_GRID;
+    }
+
+    private boolean isScoreboard() {
+        return config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.SCOREBOARD;
+    }
+
     /**
-     * Super Compact and Minimal shrink bar/line height down to 7-9px, well below what the small
-     * runescape font (sized for Normal/Compact's 8-11px rows) fits without labels overflowing
-     * their bar - so those two tiers get a proportionally smaller derived font instead.
+     * The base runescape-small font (~16pt) is sized for Normal's 13px line height; a flat -1/-2pt
+     * offset from it still overflows Compact/Super Compact's 9-11px rows, which is what caused
+     * labels to overlap the bar below them. Instead, shrink the font in half-point steps until its
+     * actual metrics (not a guessed offset) fit the tightest row this tier draws text into - the
+     * name row (lineHeight) for every tier, plus the bar row (barHeight + barGap) for tiers that
+     * label their bars (everything except Minimal, whose bars are unlabeled fills).
      */
-    private Font scaledFont() {
+    private Font scaledFont(Graphics2D graphics) {
         Font base = FontManager.getRunescapeSmallFont();
-        switch (config.partyOverlayScale()) {
-            case SUPER_COMPACT:
-            case MINIMAL:
-                return base.deriveFont(base.getSize2D() - 2f);
-            case COMPACT:
-                return base.deriveFont(base.getSize2D() - 1f);
-            default:
-                return base;
+        if (config.partyOverlayScale() == GroupScapeTrackerConfig.PartyOverlayScale.NORMAL) {
+            return base;
         }
+
+        int targetHeight = isMinimal() ? lineHeight : Math.min(lineHeight, barHeight + barGap);
+
+        Font candidate = base;
+        float size = base.getSize2D();
+        FontMetrics metrics = graphics.getFontMetrics(candidate);
+        while (metrics.getHeight() > targetHeight && size > 6f) {
+            size -= 0.5f;
+            candidate = base.deriveFont(size);
+            metrics = graphics.getFontMetrics(candidate);
+        }
+        return candidate;
     }
 
     private Color bgColor() {
@@ -538,13 +890,14 @@ public class PartyFrameOverlay extends Overlay {
 
         int nameRowHeight = nameRowHeight(member, offline);
         FontMetrics metrics = graphics.getFontMetrics();
+        int nameBaseline = y + (nameRowHeight + metrics.getAscent() - metrics.getDescent()) / 2;
 
         graphics.setColor(offline ? toGrayscale(TEXT) : TEXT);
-        graphics.drawString(member.name, textX, y + 10);
+        graphics.drawString(member.name, textX, nameBaseline);
 
         String status = offline ? "Offline" : (!config.partyOverlayHideWorld() && member.world != null ? "W" + member.world : null);
         if (status != null) {
-            graphics.drawString(status, PANEL_WIDTH - padding - metrics.stringWidth(status), y + 10);
+            graphics.drawString(status, PANEL_WIDTH - padding - metrics.stringWidth(status), nameBaseline);
         }
 
         if (!offline && !config.partyOverlayHidePrayer() && !config.partyOverlayHidePrayerIcons()) {
@@ -620,8 +973,10 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     private void drawBar(Graphics2D graphics, int x, int y, int width, String label, Integer value, Integer max, Color color) {
+        int textBaseline = barTextBaseline(graphics, y);
+
         graphics.setColor(MUTED_TEXT);
-        graphics.drawString(label, x, y + barHeight - 2);
+        graphics.drawString(label, x, textBaseline);
 
         int labelWidth = 22;
         int barX = x + labelWidth;
@@ -637,11 +992,16 @@ public class PartyFrameOverlay extends Overlay {
             graphics.fillRect(barX, y, filledWidth, barHeight);
 
             graphics.setColor(TEXT);
-            graphics.drawString(String.valueOf(clampedValue), barX + barWidth + 4, y + barHeight - 2);
+            graphics.drawString(String.valueOf(clampedValue), barX + barWidth + 4, textBaseline);
         } else {
             graphics.setColor(MUTED_TEXT);
-            graphics.drawString("--", barX + barWidth + 4, y + barHeight - 2);
+            graphics.drawString("--", barX + barWidth + 4, textBaseline);
         }
+    }
+
+    /** Bottom-aligns bar label/value text inside a barHeight-tall row using the current font's actual descent. */
+    private int barTextBaseline(Graphics2D graphics, int y) {
+        return y + barHeight - graphics.getFontMetrics().getDescent();
     }
 
     /**
@@ -669,8 +1029,9 @@ public class PartyFrameOverlay extends Overlay {
         Color border = isEnemy ? TARGET_COMBAT_BORDER : TARGET_NEUTRAL_BORDER;
         Color labelColor = isEnemy ? TARGET_COMBAT_LABEL : TARGET_NEUTRAL_LABEL;
 
+        int textBaseline = barTextBaseline(graphics, y);
         graphics.setColor(labelColor);
-        graphics.drawString("Tgt", x, y + barHeight - 2);
+        graphics.drawString("Tgt", x, textBaseline);
 
         FontMetrics metrics = graphics.getFontMetrics();
         String hpText = hasRatio ? targetHealthPercent(member) + "%" : null;
@@ -695,11 +1056,11 @@ public class PartyFrameOverlay extends Overlay {
 
         graphics.setColor(TEXT);
         String name = truncateToWidth(metrics, member.targetName, Math.max(0, barWidth - 6));
-        graphics.drawString(name, barX + 3, y + barHeight - 2);
+        graphics.drawString(name, barX + 3, textBaseline);
 
         if (hasRatio) {
             graphics.setColor(labelColor);
-            graphics.drawString(hpText, barX + barWidth + 4, y + barHeight - 2);
+            graphics.drawString(hpText, barX + barWidth + 4, textBaseline);
         }
     }
 
@@ -924,6 +1285,17 @@ public class PartyFrameOverlay extends Overlay {
         } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    /**
+     * Faux-bolds text by drawing it twice with a slight horizontal offset. The RuneScape font is
+     * a single-weight embedded TTF, so requesting {@link Font#BOLD} via deriveFont doesn't
+     * reliably synthesize an actual bold glyph outline - this stroke-doubling trick is what
+     * consistently reads as bold instead.
+     */
+    private static void drawBoldString(Graphics2D graphics, String text, float x, float y) {
+        graphics.drawString(text, x, y);
+        graphics.drawString(text, x + 0.6f, y);
     }
 
     /** Desaturates a color to gray while preserving its alpha and perceived brightness. */
