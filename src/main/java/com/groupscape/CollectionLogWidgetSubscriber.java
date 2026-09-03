@@ -1,5 +1,6 @@
 package com.groupscape;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -46,6 +47,23 @@ public class CollectionLogWidgetSubscriber {
     private boolean searchTriggered = false;
     private int searchTriggeredTick = -1;
 
+    // itemManager.search()'s GE-price cache can still be warming up (or briefly stale) right when
+    // the unlock chat message fires, so a resolution attempt that finds no match isn't necessarily
+    // permanent - retry it for a few ticks before giving up and falling back to the next manual
+    // collection log open.
+    private static final int MAX_RESOLVE_RETRY_TICKS = 10;
+    private final List<PendingClogItem> pendingItems = new ArrayList<>();
+
+    private static class PendingClogItem {
+        final String itemName;
+        final int firstAttemptTick;
+
+        PendingClogItem(String itemName, int firstAttemptTick) {
+            this.itemName = itemName;
+            this.firstAttemptTick = firstAttemptTick;
+        }
+    }
+
     public void startUp() {
         eventBus.register(this);
     }
@@ -60,6 +78,7 @@ public class CollectionLogWidgetSubscriber {
         if (s != GameState.HOPPING && s != GameState.LOGGED_IN) {
             searchTriggered = false;
             searchTriggeredTick = -1;
+            pendingItems.clear();
         }
     }
 
@@ -73,6 +92,35 @@ public class CollectionLogWidgetSubscriber {
                 searchTriggeredTick = -1;
             }
         }
+
+        retryPendingItems();
+    }
+
+    private void retryPendingItems() {
+        if (pendingItems.isEmpty()) return;
+
+        int currentTick = client.getTickCount();
+        List<PendingClogItem> stillPending = new ArrayList<>();
+        for (PendingClogItem pending : pendingItems) {
+            int itemId = resolveItemId(pending.itemName);
+            if (itemId != -1) {
+                collectionLogV2Manager.storeClogItem(itemId, 1);
+                continue;
+            }
+
+            if (currentTick - pending.firstAttemptTick >= MAX_RESOLVE_RETRY_TICKS) {
+                log.warn(
+                        "gave up resolving collection log item id for name '{}' after {} ticks; will"
+                                + " sync on next manual collection log open",
+                        pending.itemName,
+                        MAX_RESOLVE_RETRY_TICKS);
+                continue;
+            }
+
+            stillPending.add(pending);
+        }
+        pendingItems.clear();
+        pendingItems.addAll(stillPending);
     }
 
     @Subscribe
@@ -86,7 +134,8 @@ public class CollectionLogWidgetSubscriber {
         String itemName = m.group("item").trim();
         int itemId = resolveItemId(itemName);
         if (itemId == -1) {
-            log.warn("could not resolve collection log item id for name '{}'", itemName);
+            log.warn("could not resolve collection log item id for name '{}', queuing for retry", itemName);
+            pendingItems.add(new PendingClogItem(itemName, client.getTickCount()));
             return;
         }
 
@@ -101,7 +150,7 @@ public class CollectionLogWidgetSubscriber {
     // equalsIgnoreCase between them then never matches and the drop is silently lost. Normalize
     // every apostrophe-like codepoint to a single character before comparing.
     private static String normalizeApostrophes(String name) {
-        return name.replaceAll("[‘’ʼ´`]", "'");
+        return name.replaceAll("[‘’ʼ´`]", "'").replace(' ', ' ').trim();
     }
 
     private int resolveItemId(String itemName) {

@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.10] - 2026-09-03
+
+### Fixed
+- New collection log items unlocked in the middle of a session could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now retries matching the item for a few seconds before giving up.
+
 ## [1.8.9] - 2026-09-03
 
 ### Added
