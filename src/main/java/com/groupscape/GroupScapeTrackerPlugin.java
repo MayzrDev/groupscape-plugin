@@ -528,6 +528,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
         dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
     }
 
+    /** Known slayer master names (lowercase), mirrored from the site's SLAYER_MASTER_ICONS list
+     * (groupscape-web/site/src/data/slayer.js) - used to recognize a task-check/reassignment
+     * dialogue as being with a master (as opposed to any other NPC) so the master name can be
+     * refreshed immediately, see {@link #captureSlayerTaskMasterDialogue}. */
+    private static final Set<String> SLAYER_MASTER_NAMES = Set.of(
+            "turael", "spria", "mazchna", "vannaka", "chaeldar", "nieve", "steve", "duradel",
+            "konar quo maten", "krystilia"
+    );
+
     /** varps: task id/amounts/area, plus Mortimer's separate streak counter (itself a varp). */
     private static final int[] SLAYER_TASK_VARPS = {
             VarPlayerID.SLAYER_TARGET,
@@ -1548,14 +1557,30 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * available for naming a slayer task's assigning master - see {@link SlayerTaskState}'s
      * javadoc for why no varp/varbit/DB row can do it directly. Consumed (not read live) by
      * {@link #checkSlayerTaskUpdate} at the moment a task actually changes.
+     *
+     * <p>Also doubles as an immediate resync: if the NPC being talked to is a known slayer master
+     * ({@link #SLAYER_MASTER_NAMES}), the master name is pushed right away instead of waiting for
+     * {@link #checkSlayerTaskUpdate}'s task-change gate. That gate never fires on a plain re-check
+     * of an already-assigned task (talking to the master and picking "check assignment" doesn't
+     * change {@code SLAYER_TARGET}/{@code SLAYER_COUNT_ORIGINAL}), which otherwise left the master
+     * name stuck null after a plugin/client restart mid-task until the next real reassignment.
      */
     private void captureSlayerTaskMasterDialogue() {
         Widget nameWidget = client.getWidget(InterfaceID.ChatLeft.NAME);
         if (nameWidget == null || nameWidget.isHidden() || nameWidget.getText() == null) return;
 
         String name = Text.removeTags(nameWidget.getText()).trim();
-        if (!name.isEmpty()) {
-            lastDialogNpcName = name;
+        if (name.isEmpty()) return;
+
+        lastDialogNpcName = name;
+
+        if (SLAYER_MASTER_NAMES.contains(name.toLowerCase())) {
+            currentSlayerTaskMaster = name;
+
+            Player local = client.getLocalPlayer();
+            if (local != null && local.getName() != null) {
+                dataManager.getSlayerTask().update(new SlayerTaskState(local.getName(), client, currentSlayerTaskMaster));
+            }
         }
     }
 

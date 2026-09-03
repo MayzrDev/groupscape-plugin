@@ -23,8 +23,10 @@ import java.util.Objects;
  * instead captured passively from NPC dialogue text elsewhere (see
  * {@code GroupScapeTrackerPlugin#captureSlayerTaskMasterDialogue}) and snapshotted into {@code
  * masterName} by the caller whenever {@code SLAYER_TARGET}/{@code SLAYER_COUNT_ORIGINAL} change -
- * i.e. a new task was just assigned. A known gap: if the plugin/client is (re)started mid-task,
- * no dialogue snapshot exists yet, so {@code masterName} reads null until the next task change.
+ * i.e. a new task was just assigned - or immediately whenever the player talks to a recognized
+ * slayer master (including just rechecking an existing task), so a plugin/client restart mid-task
+ * only leaves {@code masterName} null until the next such conversation, not until the next
+ * reassignment.
  */
 public class SlayerTaskState implements ConsumableState {
     private final transient String playerName;

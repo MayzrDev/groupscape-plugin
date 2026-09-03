@@ -6,6 +6,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Combat achievement progress no longer waits up to a minute (or a relog) to sync to the site - it now updates the moment you complete a task or tier, and also refreshes whenever you open your Combat Achievements log.
+- Your slayer task's assigning master no longer gets stuck showing as unknown after a client restart mid-task - talking to (or rechecking with) a slayer master now refreshes it right away.
 
 ## [1.8.6] - 2026-09-02
 
