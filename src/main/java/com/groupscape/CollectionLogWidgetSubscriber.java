@@ -26,6 +26,8 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStack;
+import net.runelite.client.plugins.loottracker.LootReceived;
 import net.runelite.client.util.Text;
 
 @Slf4j
@@ -59,8 +61,16 @@ public class CollectionLogWidgetSubscriber {
     // local item cache, not a name search) against the chat message's item name. This is the
     // same approach the reference collection-log RuneLite plugin uses and works for every item
     // regardless of GE tradeability.
+    //
+    // The inventory-diff alone races against event ordering: for some drops (e.g. boss uniques)
+    // the item lands in the inventory the same tick the unlock message is queued, and RuneLite
+    // can dispatch ItemContainerChanged before ChatMessage - the diff then sees no change to
+    // match against. LootReceived is a second, independent source for the same item (the raw
+    // loot the kill granted) that isn't subject to that same ordering, so it's kept as a
+    // fallback resolver rather than clearing pendingItemName on a failed diff.
     private String pendingItemName;
     private Map<Integer, Integer> inventorySnapshot;
+    private int pendingItemTick = -1;
 
     public void startUp() {
         eventBus.register(this);
@@ -78,6 +88,7 @@ public class CollectionLogWidgetSubscriber {
             searchTriggeredTick = -1;
             pendingItemName = null;
             inventorySnapshot = null;
+            pendingItemTick = -1;
         }
     }
 
@@ -91,6 +102,17 @@ public class CollectionLogWidgetSubscriber {
                 searchTriggeredTick = -1;
             }
         }
+
+        // Neither the inventory diff nor LootReceived resolved the pending item within a few
+        // ticks - give up and fall back to the next manual/widget-triggered collection log scan
+        // (onScriptPreFired below) rather than letting a stale name linger and get matched
+        // against an unrelated later drop.
+        if (pendingItemTick != -1 && client.getTickCount() - pendingItemTick >= 5) {
+            log.warn("timed out resolving collection log item id for name '{}'", pendingItemName);
+            pendingItemName = null;
+            inventorySnapshot = null;
+            pendingItemTick = -1;
+        }
     }
 
     @Subscribe
@@ -103,6 +125,7 @@ public class CollectionLogWidgetSubscriber {
 
         pendingItemName = m.group("item").trim();
         inventorySnapshot = snapshotInventory();
+        pendingItemTick = client.getTickCount();
     }
 
     @Subscribe
@@ -127,12 +150,11 @@ public class CollectionLogWidgetSubscriber {
         }
 
         if (resolvedItemId == -1) {
-            // Some rewards (e.g. clue caskets) route through a different container before
-            // landing in the inventory - fall back to the next manual collection log open,
-            // same as before this diffing was added.
-            log.warn("could not resolve collection log item id for name '{}' from inventory diff", pendingItemName);
-            pendingItemName = null;
-            inventorySnapshot = null;
+            // No match yet - some rewards (e.g. clue caskets) route through a different
+            // container before landing in the inventory, or this ItemContainerChanged simply
+            // fired before the item actually landed. Leave pendingItemName set so
+            // onLootReceived (or a later ItemContainerChanged) still gets a chance to resolve
+            // it; onGameTick above expires it if nothing ever does.
             return;
         }
 
@@ -142,6 +164,23 @@ public class CollectionLogWidgetSubscriber {
         collectionLogV2Manager.storeClogItem(resolvedItemId, 1);
         pendingItemName = null;
         inventorySnapshot = null;
+        pendingItemTick = -1;
+    }
+
+    @Subscribe
+    public void onLootReceived(LootReceived event) {
+        if (pendingItemName == null) return;
+
+        for (ItemStack item : event.getItems()) {
+            ItemComposition composition = itemManager.getItemComposition(item.getId());
+            if (!composition.getName().equalsIgnoreCase(pendingItemName)) continue;
+
+            collectionLogV2Manager.storeClogItem(item.getId(), 1);
+            pendingItemName = null;
+            inventorySnapshot = null;
+            pendingItemTick = -1;
+            return;
+        }
     }
 
     private Map<Integer, Integer> snapshotInventory() {
