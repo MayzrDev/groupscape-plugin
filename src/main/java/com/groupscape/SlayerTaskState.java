@@ -76,12 +76,39 @@ public class SlayerTaskState implements ConsumableState {
         }
     }
 
+    /** Task id shared by every DT2-boss slayer assignment (Leviathan, Whisperer, Vardorvis, Duke
+     * Sucellus, ...) - which specific boss is actually assigned lives in a separate varbit, see
+     * {@link #resolveBossTaskId}. Ported from RuneLite core's SlayerPlugin. */
+    private static final int BOSS_TASK_ID = 98;
+
     private static String resolveTaskName(Client client, int taskId) {
+        if (taskId == BOSS_TASK_ID) {
+            Integer bossTaskId = resolveBossTaskId(client);
+            if (bossTaskId == null) return "Boss";
+            taskId = bossTaskId;
+        }
+
         List<Integer> rows = client.getDBRowsByValue(DBTableID.SlayerTask.ID, DBTableID.SlayerTask.COL_ID, 0, taskId);
         if (rows.isEmpty()) return null;
 
         Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerTask.COL_NAME_UPPERCASE, 0);
         return fields.length > 0 ? (String) fields[0] : null;
+    }
+
+    /**
+     * A boss-task assignment ({@code SLAYER_TARGET == BOSS_TASK_ID}) names which boss via {@code
+     * VarbitID#SLAYER_TARGET_BOSSID} indexing {@code DBTableID.SlayerTaskSublist} rather than
+     * directly via {@code DBTableID.SlayerTask} like every other task - this resolves that
+     * indirection to the real {@code SlayerTask} row id. Ported from RuneLite core's SlayerPlugin.
+     */
+    private static Integer resolveBossTaskId(Client client) {
+        int bossVarbitId = client.getVarbitValue(VarbitID.SLAYER_TARGET_BOSSID);
+        List<Integer> rows = client.getDBRowsByValue(
+                DBTableID.SlayerTaskSublist.ID, DBTableID.SlayerTaskSublist.COL_TASK_SUBTABLE_ID, 0, bossVarbitId);
+        if (rows.isEmpty()) return null;
+
+        Object[] fields = client.getDBTableField(rows.get(0), DBTableID.SlayerTaskSublist.COL_TASK, 0);
+        return fields.length > 0 ? (Integer) fields[0] : null;
     }
 
     private static String resolveAreaName(Client client, int areaId) {

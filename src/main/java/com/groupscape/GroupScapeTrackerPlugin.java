@@ -552,6 +552,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
             VarbitID.SLAYER_MASTER,
             VarbitID.SLAYER_TASKS_COMPLETED,
             VarbitID.SLAYER_WILDERNESS_TASKS_COMPLETED,
+            // Names which specific DT2 boss a BOSS_TASK_ID assignment refers to - see
+            // SlayerTaskState#resolveBossTaskId. Not itself a new-task signal (SLAYER_TARGET
+            // already flips for that); just needs to trigger a rebuild so the resolved name updates.
+            VarbitID.SLAYER_TARGET_BOSSID,
     };
 
     /**
