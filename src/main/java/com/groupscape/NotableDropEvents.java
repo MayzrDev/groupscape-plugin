@@ -20,11 +20,12 @@ public class NotableDropEvents {
     private String consumedOwner;
 
     public synchronized void onNotableDrop(String playerName, String sourceType, String sourceName,
-                                            String itemName, long itemValue, long totalValue) {
+                                            int itemId, String itemName, long itemValue, long totalValue) {
         owner = playerName;
         Map<String, Object> event = new HashMap<>();
         event.put("sourceType", sourceType);
         event.put("sourceName", sourceName);
+        event.put("itemId", itemId);
         event.put("itemName", itemName);
         event.put("itemValue", itemValue);
         event.put("totalValue", totalValue);

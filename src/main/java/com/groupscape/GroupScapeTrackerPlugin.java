@@ -1468,9 +1468,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
         if (highlight == null || totalValue < config.notableDropThreshold()) return;
 
+        int canonicalItemId = itemManager.canonicalize(highlight.getId());
         String itemName = itemManager.getItemComposition(highlight.getId()).getName();
         dataManager.getNotableDropEvents().onNotableDrop(
-                local.getName(), notableDropSourceType(type), sourceName, itemName, highlightValue, totalValue);
+                local.getName(), notableDropSourceType(type), sourceName, canonicalItemId, itemName, highlightValue, totalValue);
     }
 
     private static String notableDropSourceType(LootRecordType type) {
