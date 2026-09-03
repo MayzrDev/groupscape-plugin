@@ -1083,10 +1083,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * hitsplat beforehand, so this silently drops every Gauntlet kill (and, since the reward
      * chest's loot is granted as this NPC's own {@code LootReceived} rather than a separate
      * chest event - see {@link #onLootReceived} - the reward loot along with it, with nothing
-     * left to correlate it to). {@link #onChatMessage}'s {@code GAUNTLET_COMPLETE_PATTERN}
-     * handler works around it by synthesizing the kill straight from the "Your ... Gauntlet
-     * completion count is: N." line instead, the same way {@link RaidCompletionEvents} sidesteps
-     * unreliable despawn detection for CoX/ToA.
+     * left to correlate it to). {@link #onChatMessage}'s {@code GAUNTLET_COMPLETE_PATTERN} handler
+     * works around it by holding the "Your ... Gauntlet completion count is: N." line until the
+     * reward chest's loot actually arrives, then synthesizing the kill via
+     * {@link #claimPendingGauntletKill} right before it - the same trick
+     * {@link RaidCompletionEvents} uses to sidestep unreliable despawn detection for CoX/ToA, just
+     * triggered off loot arrival instead of the chat line itself, since unlike a raid's chest the
+     * Gauntlet's reward chest may not be opened for a while after the completion line prints.
      */
     @Subscribe
     public void onNpcSpawned(NpcSpawned event) {
@@ -1176,6 +1179,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 entry.put("quantity", item.getQuantity());
                 items.add(entry);
             }
+            claimPendingGauntletKill(event.getName());
             dataManager.getKillLootDeathEvents().onLoot(event.getName(), items);
         } else if (event.getType() == LootRecordType.EVENT) {
             String clueTier = ClueTier.extractTier(event.getName());
@@ -1235,9 +1239,18 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * is: 8." - see the {@link #onNpcDespawned} javadoc for why the Hunllef needs this instead of
      * ordinary despawn detection. */
     private static final Pattern GAUNTLET_COMPLETE_PATTERN = Pattern.compile(
-            "^Your (?<corrupted>Corrupted )?Gauntlet completion count is: [\\d,]+\\.$");
+            "^Your (?<corrupted>Corrupted )?Gauntlet completion count is: (?<kc>[\\d,]+)\\.$");
     private static final int CRYSTALLINE_HUNLLEF_NPC_ID = 9021;
     private static final int CORRUPTED_HUNLLEF_NPC_ID = 9038;
+    /** Generous on purpose - the reward chest sits in its own room and there's nothing forcing
+     * you to open it immediately, unlike normal boss loot which lands within a second or two of
+     * the kill. You can't re-enter/re-fight without opening it first though, so it's always
+     * exactly one chest per completion - no risk of this matching the wrong run. */
+    private static final long GAUNTLET_LOOT_CORRELATION_WINDOW_MILLIS = 10 * 60 * 1000L;
+    private String pendingGauntletNpcName;
+    private int pendingGauntletNpcId;
+    private Integer pendingGauntletKc;
+    private long pendingGauntletDetectedAtMillis;
 
     @Subscribe
     public void onChatMessage(ChatMessage event) {
@@ -1260,7 +1273,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         Matcher gauntlet = GAUNTLET_COMPLETE_PATTERN.matcher(message);
         if (gauntlet.find()) {
-            onGauntletCompletion(gauntlet.group("corrupted") != null);
+            boolean corrupted = gauntlet.group("corrupted") != null;
+            pendingGauntletNpcName = corrupted ? "Corrupted Hunllef" : "Crystalline Hunllef";
+            pendingGauntletNpcId = corrupted ? CORRUPTED_HUNLLEF_NPC_ID : CRYSTALLINE_HUNLLEF_NPC_ID;
+            pendingGauntletKc = Integer.parseInt(gauntlet.group("kc").replace(",", ""));
+            pendingGauntletDetectedAtMillis = System.currentTimeMillis();
             return;
         }
 
@@ -1272,22 +1289,38 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     /**
-     * Synthesizes the Hunllef kill directly from the Gauntlet's completion chat line rather than
-     * waiting on {@link #onNpcDespawned}'s health-ratio check, which live testing showed never
-     * fires for either Hunllef variant. The reward chest's loot arrives moments later as this
-     * same NPC name's own {@code LootReceived} (see {@link #onLootReceived}), so it's able to
-     * correlate against this synthesized kill exactly as it would a normal despawn-detected one.
+     * The Gauntlet's reward chest grants its loot as the Hunllef's own {@code LootReceived}
+     * (verified live - see {@link #onNpcDespawned}'s javadoc), so this is really correlating a
+     * kill to loot exactly like {@link KillLootDeathEvents#onLoot} always does - it just can't use
+     * that class's normal pending-kill queue, since that drains every second
+     * ({@link DataManager#submitToApi()}) while the chest might not be opened for minutes. Instead
+     * the completion chat line is held here until this NPC's loot actually arrives, at which point
+     * the kill is synthesized right before the matching {@link KillLootDeathEvents#onLoot} call
+     * below so they land in the same upload with no drain race possible.
+     *
+     * @return true if {@code npcName} matched a pending completion (caller should still make its
+     * normal {@code onLoot} call immediately after - this only creates the kill half)
      */
-    private void onGauntletCompletion(boolean corrupted) {
-        Player local = client.getLocalPlayer();
-        if (local == null || local.getName() == null) return;
-        WorldPoint wp = local.getWorldLocation();
-        if (wp == null) return;
+    private boolean claimPendingGauntletKill(String npcName) {
+        if (pendingGauntletNpcName == null || !pendingGauntletNpcName.equals(npcName)) return false;
+        if (System.currentTimeMillis() - pendingGauntletDetectedAtMillis > GAUNTLET_LOOT_CORRELATION_WINDOW_MILLIS) {
+            pendingGauntletNpcName = null;
+            pendingGauntletKc = null;
+            return false;
+        }
 
-        String npcName = corrupted ? "Corrupted Hunllef" : "Crystalline Hunllef";
-        int npcId = corrupted ? CORRUPTED_HUNLLEF_NPC_ID : CRYSTALLINE_HUNLLEF_NPC_ID;
+        Player local = client.getLocalPlayer();
+        WorldPoint wp = local == null ? null : local.getWorldLocation();
+        if (local == null || local.getName() == null || wp == null) return false;
+
         dataManager.getKillLootDeathEvents().onKill(
-                local.getName(), npcId, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+                local.getName(), pendingGauntletNpcId, npcName, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+        if (pendingGauntletKc != null) {
+            dataManager.getKillLootDeathEvents().onKillCount(npcName, pendingGauntletKc);
+        }
+        pendingGauntletNpcName = null;
+        pendingGauntletKc = null;
+        return true;
     }
 
     /**

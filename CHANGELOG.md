@@ -8,7 +8,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Your current slayer task, master, points, and streak are now reported to your group, so the website can show them in each member's side panel.
 
 ### Fixed
-- Fixed the Corrupted/Crystalline Hunllef never showing up as a kill in the Activity Feed, and the Gauntlet reward chest loot never showing in the Loot Log - the Hunllef's health bar never reliably signals its death, so both are now detected from the "Gauntlet completion count" chat message instead.
+- Fixed the Corrupted/Crystalline Hunllef never showing up as a kill in the Activity Feed, and the Gauntlet reward chest loot never showing in the Loot Log - the Hunllef's health bar never reliably signals its death, so the kill is now detected from the "Gauntlet completion count" chat message instead, and correctly paired with the reward chest's loot whenever you get around to opening it.
 - Fixed your own row in the party overlay always showing a gold accent bar instead of your assigned helmet colour, even though every other group member's row already showed theirs correctly.
 - Fixed Tombs of Amascut (and occasionally Chambers of Xeric) completions sometimes not appearing in the Activity Feed at all - the reward chest loot is now enough on its own to log the completion, instead of requiring an in-game chat message to line up with it first.
 - Internal: confirmed raid completion chat detection wording against real completion messages and removed a stale internal note about it being unverified.
