@@ -15,7 +15,7 @@ import java.util.Map;
  * to be open.
  */
 public class CombatAchievementState implements ConsumableState {
-    private static final int[] CA_TASK_COMPLETED_VARPS = {
+    static final int[] CA_TASK_COMPLETED_VARPS = {
             VarPlayerID.CA_TASK_COMPLETED_0,
             VarPlayerID.CA_TASK_COMPLETED_1,
             VarPlayerID.CA_TASK_COMPLETED_2,

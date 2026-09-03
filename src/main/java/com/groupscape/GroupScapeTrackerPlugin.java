@@ -515,6 +515,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
 
         checkSlayerTaskUpdate(varpId, event.getVarbitId());
+        checkCombatAchievementUpdate(varpId, event.getVarbitId());
+    }
+
+    @Subscribe
+    public void onWidgetLoaded(WidgetLoaded event) {
+        if (event.getGroupId() != InterfaceID.CA_TASKS) return;
+        if (doNotUseThisData()) return;
+
+        String playerName = client.getLocalPlayer().getName();
+        if (playerName == null) return;
+        dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
     }
 
     /** varps: task id/amounts/area, plus Mortimer's separate streak counter (itself a varp). */
@@ -572,6 +583,46 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (local == null || local.getName() == null) return;
 
         dataManager.getSlayerTask().update(new SlayerTaskState(local.getName(), client, currentSlayerTaskMaster));
+    }
+
+    private static final int[] COMBAT_ACHIEVEMENT_TIER_VARBITS = {
+            Varbits.COMBAT_ACHIEVEMENT_TIER_EASY,
+            Varbits.COMBAT_ACHIEVEMENT_TIER_MEDIUM,
+            Varbits.COMBAT_ACHIEVEMENT_TIER_HARD,
+            Varbits.COMBAT_ACHIEVEMENT_TIER_ELITE,
+            Varbits.COMBAT_ACHIEVEMENT_TIER_MASTER,
+            Varbits.COMBAT_ACHIEVEMENT_TIER_GRANDMASTER,
+    };
+
+    /**
+     * Combat achievements are otherwise only refreshed on the 60s
+     * {@link #updateThingsThatDoNotChangeOften} poll, so a task/tier completed mid-session could sit
+     * stale on the site for up to a minute. Push reactively instead, same as
+     * {@link #checkSlayerTaskUpdate}. {@link DataState#update} dedupes via
+     * {@link CombatAchievementState#equals}, so it's harmless to rebuild+push on every candidate
+     * varp/varbit change.
+     */
+    private void checkCombatAchievementUpdate(int varpId, int varbitId) {
+        boolean relevant = false;
+        for (int v : CombatAchievementState.CA_TASK_COMPLETED_VARPS) {
+            if (varpId == v) {
+                relevant = true;
+                break;
+            }
+        }
+        if (!relevant) {
+            for (int v : COMBAT_ACHIEVEMENT_TIER_VARBITS) {
+                if (varbitId == v) {
+                    relevant = true;
+                    break;
+                }
+            }
+        }
+        if (!relevant) return;
+
+        String playerName = client.getLocalPlayer().getName();
+        if (playerName == null) return;
+        dataManager.getCombatAchievements().update(new CombatAchievementState(playerName, client));
     }
 
     @Subscribe

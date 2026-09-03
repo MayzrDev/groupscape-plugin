@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.7] - 2026-09-03
+
+### Fixed
+- Combat achievement progress no longer waits up to a minute (or a relog) to sync to the site - it now updates the moment you complete a task or tier, and also refreshes whenever you open your Combat Achievements log.
+
 ## [1.8.6] - 2026-09-02
 
 ### Added
