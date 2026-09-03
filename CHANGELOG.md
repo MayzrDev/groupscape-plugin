@@ -6,6 +6,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Deaths to bosses (e.g. Leviathan) that hit you with a ranged/special attack you weren't actively fighting back against now correctly show "died to <boss>" instead of just "died" - killer attribution now uses whichever NPC last landed a hit on you, not just whoever you were targeting.
+- Checking your slayer task (helm, enchanted gem, black mask, or with your slayer master) could sometimes show "null" for the task name on the site while the kill count stayed correct - the task name and location no longer get wiped out by a momentary lookup hiccup.
 
 ## [1.8.7] - 2026-09-03
 

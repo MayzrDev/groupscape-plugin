@@ -39,10 +39,26 @@ public class SlayerTaskState implements ConsumableState {
     private final int points;
     private final int streak;
 
+    private final int taskId;
+
     public SlayerTaskState(String playerName, Client client, String masterName) {
+        this(playerName, client, masterName, null);
+    }
+
+    /**
+     * @param previous the last state successfully pushed for this player, or null. The DB-row
+     * lookups in {@link #resolveTaskName} and {@link #resolveAreaName} can transiently come back
+     * empty for a real, currently-assigned task (RuneLite core's own SlayerPlugin sees the same
+     * thing and simply skips the update that tick rather than clobbering its last-known name -
+     * ported here as falling back to {@code previous}'s name/location when the id being resolved
+     * hasn't changed, since this class always rebuilds a full immutable snapshot rather than
+     * patching one in place).
+     */
+    public SlayerTaskState(String playerName, Client client, String masterName, SlayerTaskState previous) {
         this.playerName = playerName;
 
         int taskId = client.getVarpValue(VarPlayerID.SLAYER_TARGET);
+        this.taskId = taskId;
         this.hasTask = taskId > 0;
         this.amountRemaining = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
         this.initialAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
@@ -65,10 +81,20 @@ public class SlayerTaskState implements ConsumableState {
         }
 
         if (hasTask) {
+            boolean samePreviousTask = previous != null && previous.hasTask && previous.taskId == taskId;
+
             this.masterName = masterName;
-            this.taskName = resolveTaskName(client, taskId);
+
+            String resolvedTaskName = resolveTaskName(client, taskId);
+            this.taskName = resolvedTaskName != null
+                    ? resolvedTaskName
+                    : (samePreviousTask ? previous.taskName : null);
+
             int areaId = client.getVarpValue(VarPlayerID.SLAYER_AREA);
-            this.taskLocation = resolveAreaName(client, areaId);
+            String resolvedAreaName = resolveAreaName(client, areaId);
+            this.taskLocation = resolvedAreaName != null
+                    ? resolvedAreaName
+                    : (samePreviousTask ? previous.taskLocation : null);
         } else {
             this.masterName = null;
             this.taskName = null;

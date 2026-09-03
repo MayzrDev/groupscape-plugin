@@ -496,7 +496,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // plugin/client (re)started mid-task, so nothing has fired a SLAYER_TARGET/etc varp change
         // yet. DataState#update() dedupes via SlayerTaskState#equals(), so this is a harmless no-op
         // most of the time.
-        dataManager.getSlayerTask().update(new SlayerTaskState(playerName, client, currentSlayerTaskMaster));
+        pushSlayerTaskState(playerName);
     }
 
     @Schedule(
@@ -602,7 +602,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
         Player local = client.getLocalPlayer();
         if (local == null || local.getName() == null) return;
 
-        dataManager.getSlayerTask().update(new SlayerTaskState(local.getName(), client, currentSlayerTaskMaster));
+        pushSlayerTaskState(local.getName());
+    }
+
+    /** Rebuilds and pushes {@link SlayerTaskState}, handing in the last-pushed state so a
+     * transient DB-row resolution miss (see {@link SlayerTaskState}'s two-arg-plus-previous
+     * constructor javadoc) falls back to the previously known task name/location instead of
+     * clobbering it with null. */
+    private void pushSlayerTaskState(String playerName) {
+        DataState slayerTask = dataManager.getSlayerTask();
+        SlayerTaskState previous = (SlayerTaskState) slayerTask.mostRecentState();
+        slayerTask.update(new SlayerTaskState(playerName, client, currentSlayerTaskMaster, previous));
     }
 
     private static final int[] COMBAT_ACHIEVEMENT_TIER_VARBITS = {
@@ -1625,7 +1635,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
             Player local = client.getLocalPlayer();
             if (local != null && local.getName() != null) {
-                dataManager.getSlayerTask().update(new SlayerTaskState(local.getName(), client, currentSlayerTaskMaster));
+                pushSlayerTaskState(local.getName());
             }
         }
     }
