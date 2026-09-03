@@ -1,7 +1,7 @@
 package com.groupscape;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
@@ -10,19 +10,23 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.GameState;
+import net.runelite.api.Item;
+import net.runelite.api.ItemComposition;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.MenuAction;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.events.ScriptPreFired;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
-import net.runelite.http.api.item.ItemPrice;
 
 @Slf4j
 @Singleton
@@ -47,22 +51,16 @@ public class CollectionLogWidgetSubscriber {
     private boolean searchTriggered = false;
     private int searchTriggeredTick = -1;
 
-    // itemManager.search()'s GE-price cache can still be warming up (or briefly stale) right when
-    // the unlock chat message fires, so a resolution attempt that finds no match isn't necessarily
-    // permanent - retry it for a few ticks before giving up and falling back to the next manual
-    // collection log open.
-    private static final int MAX_RESOLVE_RETRY_TICKS = 10;
-    private final List<PendingClogItem> pendingItems = new ArrayList<>();
-
-    private static class PendingClogItem {
-        final String itemName;
-        final int firstAttemptTick;
-
-        PendingClogItem(String itemName, int firstAttemptTick) {
-            this.itemName = itemName;
-            this.firstAttemptTick = firstAttemptTick;
-        }
-    }
+    // itemManager.search() only matches items with a GE price, so it silently misses a large
+    // share of collection log items (untradeable, or the search cache just hasn't loaded yet).
+    // Instead, resolve the item id from the player's own inventory: snapshot it the moment the
+    // unlock chat message fires, then diff it against the inventory a tick later (once the item
+    // has actually landed) and match the newly-added item's real name (read straight from the
+    // local item cache, not a name search) against the chat message's item name. This is the
+    // same approach the reference collection-log RuneLite plugin uses and works for every item
+    // regardless of GE tradeability.
+    private String pendingItemName;
+    private Map<Integer, Integer> inventorySnapshot;
 
     public void startUp() {
         eventBus.register(this);
@@ -78,7 +76,8 @@ public class CollectionLogWidgetSubscriber {
         if (s != GameState.HOPPING && s != GameState.LOGGED_IN) {
             searchTriggered = false;
             searchTriggeredTick = -1;
-            pendingItems.clear();
+            pendingItemName = null;
+            inventorySnapshot = null;
         }
     }
 
@@ -92,35 +91,6 @@ public class CollectionLogWidgetSubscriber {
                 searchTriggeredTick = -1;
             }
         }
-
-        retryPendingItems();
-    }
-
-    private void retryPendingItems() {
-        if (pendingItems.isEmpty()) return;
-
-        int currentTick = client.getTickCount();
-        List<PendingClogItem> stillPending = new ArrayList<>();
-        for (PendingClogItem pending : pendingItems) {
-            int itemId = resolveItemId(pending.itemName);
-            if (itemId != -1) {
-                collectionLogV2Manager.storeClogItem(itemId, 1);
-                continue;
-            }
-
-            if (currentTick - pending.firstAttemptTick >= MAX_RESOLVE_RETRY_TICKS) {
-                log.warn(
-                        "gave up resolving collection log item id for name '{}' after {} ticks; will"
-                                + " sync on next manual collection log open",
-                        pending.itemName,
-                        MAX_RESOLVE_RETRY_TICKS);
-                continue;
-            }
-
-            stillPending.add(pending);
-        }
-        pendingItems.clear();
-        pendingItems.addAll(stillPending);
     }
 
     @Subscribe
@@ -131,37 +101,59 @@ public class CollectionLogWidgetSubscriber {
         Matcher m = NEW_CLOG_ITEM_PATTERN.matcher(message);
         if (!m.find()) return;
 
-        String itemName = m.group("item").trim();
-        int itemId = resolveItemId(itemName);
-        if (itemId == -1) {
-            log.warn("could not resolve collection log item id for name '{}', queuing for retry", itemName);
-            pendingItems.add(new PendingClogItem(itemName, client.getTickCount()));
+        pendingItemName = m.group("item").trim();
+        inventorySnapshot = snapshotInventory();
+    }
+
+    @Subscribe
+    public void onItemContainerChanged(ItemContainerChanged event) {
+        if (pendingItemName == null) return;
+        if (event.getContainerId() != InventoryID.INV) return;
+
+        Map<Integer, Integer> before = inventorySnapshot != null ? inventorySnapshot : new HashMap<>();
+        Map<Integer, Integer> after = snapshotInventory();
+
+        int resolvedItemId = -1;
+        for (Map.Entry<Integer, Integer> entry : after.entrySet()) {
+            int itemId = entry.getKey();
+            int gained = entry.getValue() - before.getOrDefault(itemId, 0);
+            if (gained <= 0) continue;
+
+            ItemComposition composition = itemManager.getItemComposition(itemId);
+            if (composition.getName().equalsIgnoreCase(pendingItemName)) {
+                resolvedItemId = itemId;
+                break;
+            }
+        }
+
+        if (resolvedItemId == -1) {
+            // Some rewards (e.g. clue caskets) route through a different container before
+            // landing in the inventory - fall back to the next manual collection log open,
+            // same as before this diffing was added.
+            log.warn("could not resolve collection log item id for name '{}' from inventory diff", pendingItemName);
+            pendingItemName = null;
+            inventorySnapshot = null;
             return;
         }
 
         // Real quantity (for stackable log entries) is only known once the log widget is
         // scanned; this just registers the unlock immediately so it isn't lost until the
         // player next opens the log. onScriptPreFired below overwrites it with the true count.
-        collectionLogV2Manager.storeClogItem(itemId, 1);
+        collectionLogV2Manager.storeClogItem(resolvedItemId, 1);
+        pendingItemName = null;
+        inventorySnapshot = null;
     }
 
-    // The unlock chat line and ItemManager's search index don't always agree on which apostrophe
-    // character a name uses (e.g. "Beekeeper's gloves" vs "Beekeeper's gloves") - a straight
-    // equalsIgnoreCase between them then never matches and the drop is silently lost. Normalize
-    // every apostrophe-like codepoint to a single character before comparing.
-    private static String normalizeApostrophes(String name) {
-        return name.replaceAll("[‘’ʼ´`]", "'").replace(' ', ' ').trim();
-    }
+    private Map<Integer, Integer> snapshotInventory() {
+        Map<Integer, Integer> snapshot = new HashMap<>();
+        ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+        if (inventory == null) return snapshot;
 
-    private int resolveItemId(String itemName) {
-        List<ItemPrice> matches = itemManager.search(itemName);
-        String normalizedTarget = normalizeApostrophes(itemName);
-        for (ItemPrice match : matches) {
-            if (normalizeApostrophes(match.getName()).equalsIgnoreCase(normalizedTarget)) {
-                return match.getId();
-            }
+        for (Item item : inventory.getItems()) {
+            if (item.getId() == -1) continue;
+            snapshot.merge(item.getId(), item.getQuantity(), Integer::sum);
         }
-        return -1;
+        return snapshot;
     }
 
     @Subscribe

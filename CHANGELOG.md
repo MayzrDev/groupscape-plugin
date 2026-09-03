@@ -5,7 +5,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ## [1.8.10] - 2026-09-03
 
 ### Fixed
-- New collection log items unlocked in the middle of a session could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now retries matching the item for a few seconds before giving up.
+- New collection log items unlocked in the middle of a session (especially untradeable ones) could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now identifies the unlocked item directly from your inventory instead of relying on a Grand Exchange price lookup that doesn't cover every item.
 
 ## [1.8.9] - 2026-09-03
 
