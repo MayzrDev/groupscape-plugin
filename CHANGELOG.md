@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.8] - 2026-09-03
+
+### Fixed
+- Deaths to bosses (e.g. Leviathan) that hit you with a ranged/special attack you weren't actively fighting back against now correctly show "died to <boss>" instead of just "died" - killer attribution now uses whichever NPC last landed a hit on you, not just whoever you were targeting.
+
 ## [1.8.7] - 2026-09-03
 
 ### Fixed

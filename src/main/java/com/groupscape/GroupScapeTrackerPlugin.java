@@ -189,6 +189,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * instead of "is it at 0 right now". Trimmed on despawn so this doesn't grow unbounded.
      */
     private final Map<Integer, Integer> npcHealthRatioByIndex = new HashMap<>();
+    /**
+     * Name of whichever NPC last landed a damaging hitsplat on the local player - see
+     * {@link #recordHitsplatAttacker}. Used for death-event killer attribution instead of
+     * {@code local.getInteracting()}, which reflects who the player is targeting, not who's
+     * attacking them (wrong for ranged/AoE boss specials the player never targeted back).
+     */
+    private String lastHitsplatAttackerName;
     private static final double LOW_HP_ALERT_THRESHOLD = 0.25;
     private static final double LOW_HP_REARM_THRESHOLD = 0.5;
     private static final int SECONDS_BETWEEN_UPLOADS = 1;
@@ -1174,11 +1181,39 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     @Subscribe
     public void onHitsplatApplied(HitsplatApplied event) {
-        if (!(event.getActor() instanceof NPC)) return;
-        NPC npc = (NPC) event.getActor();
+        Actor actor = event.getActor();
+        if (actor == client.getLocalPlayer()) {
+            recordHitsplatAttacker(event.getHitsplat());
+            return;
+        }
+
+        if (!(actor instanceof NPC)) return;
+        NPC npc = (NPC) actor;
         int ratio = npc.getHealthRatio();
         if (ratio >= 0) {
             npcHealthRatioByIndex.put(npc.getIndex(), ratio);
+        }
+    }
+
+    /**
+     * Hitsplats carry no attacker field in the RuneLite API, so the closest available signal for
+     * "what just hit me" is scanning nearby NPCs for one currently targeting the local player
+     * ({@code npc.getInteracting() == local}) at the moment a damaging splat lands. Captured here
+     * rather than continuously tracking {@code local.getInteracting()} (who the player is
+     * attacking) so it still attributes correctly when the player never targeted back - e.g. a
+     * ranged/AoE boss special. Consumed by {@link #onActorDeath}.
+     */
+    private void recordHitsplatAttacker(Hitsplat hitsplat) {
+        if (hitsplat.getHitsplatType() == HitsplatID.HEAL || hitsplat.getAmount() <= 0) return;
+
+        Player local = client.getLocalPlayer();
+        if (local == null) return;
+
+        for (NPC npc : client.getNpcs()) {
+            if (npc.getInteracting() == local && npc.getName() != null) {
+                lastHitsplatAttackerName = npc.getName();
+                return;
+            }
         }
     }
 
@@ -1455,9 +1490,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     /**
-     * {@code ActorDeath} filtered to the local player. Killer attribution is best-effort only
-     * via {@code Actor.getInteracting()} (the closest available signal - there is no attacker
-     * field on hitsplats), ported from groupscape-old.
+     * {@code ActorDeath} filtered to the local player. Killer attribution is best-effort: primarily
+     * {@link #lastHitsplatAttackerName} (the NPC that landed the most recent damaging hit - see
+     * {@link #recordHitsplatAttacker}), falling back to {@code Actor.getInteracting()} for damage
+     * sources that don't show up as an NPC hitsplat (e.g. environmental). Ported from
+     * groupscape-old, since improved to use hitsplat-derived attribution instead of only
+     * {@code getInteracting()}, which reflects who the player is targeting rather than who's
+     * attacking them - wrong for ranged/AoE specials the player never targeted back.
      *
      * RuneLite's {@code ActorDeath} is driven off death animation IDs client-side and can fire
      * without an actual death (anim ID reuse, desync). Corroborate with the real hitpoints stat
@@ -1475,7 +1514,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (wp == null) return;
 
         Actor interacting = local.getInteracting();
-        String killerName = interacting != null ? interacting.getName() : null;
+        String killerName = lastHitsplatAttackerName != null
+                ? lastHitsplatAttackerName
+                : (interacting != null ? interacting.getName() : null);
+        lastHitsplatAttackerName = null;
         pendingDeathCandidate = new PendingDeathCandidate(local.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), killerName);
         pendingDeathConfirmTicks = DEATH_CONFIRM_TICKS;
     }
