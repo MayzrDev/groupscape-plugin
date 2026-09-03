@@ -14,6 +14,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Scoreboard: sized up about a third, with a larger, bolder name label.
 
 ### Fixed
+- A newly-assigned slayer boss task (Leviathan, Whisperer, Vardorvis, Duke Sucellus, etc.) could get permanently stuck showing as "Unknown task" in the group panel/side panel instead of the boss's name.
 - Orb Grid's Prayer/Run/Spec pips no longer spill outside the panel's bottom edge - padding and row spacing now account for how far the bigger pips hang off each orb.
 - Scoreboard's member initials now actually render bold - the font-weight flag alone wasn't visibly bolding the game's pixel font.
 - New collection log items unlocked in the middle of a session (especially untradeable ones) could sometimes fail to sync to the Activity Feed until you next opened your Collection Log - the plugin now identifies the unlocked item directly from your inventory instead of relying on a Grand Exchange price lookup that doesn't cover every item.

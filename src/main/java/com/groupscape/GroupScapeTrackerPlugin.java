@@ -599,10 +599,18 @@ public class GroupScapeTrackerPlugin extends Plugin {
             currentSlayerTaskMaster = lastDialogNpcName;
         }
 
-        Player local = client.getLocalPlayer();
-        if (local == null || local.getName() == null) return;
+        // Deferred to the next client-thread tick, same as RuneLite core's own SlayerPlugin
+        // (see its updateTask()/clientThread.invokeLater() call) - the DBTableID.SlayerTaskSublist
+        // row for a just-changed SLAYER_TARGET_BOSSID isn't guaranteed to be populated yet at the
+        // moment this VarbitChanged handler runs mid-tick, so resolving synchronously here can miss
+        // it and (for a brand-new task, with no previous state to fall back on) permanently strand
+        // taskName at null - i.e. the site showing "Unknown task" forever for that assignment.
+        clientThread.invokeLater(() -> {
+            Player local = client.getLocalPlayer();
+            if (local == null || local.getName() == null) return;
 
-        pushSlayerTaskState(local.getName());
+            pushSlayerTaskState(local.getName());
+        });
     }
 
     /** Rebuilds and pushes {@link SlayerTaskState}, handing in the last-pushed state so a
