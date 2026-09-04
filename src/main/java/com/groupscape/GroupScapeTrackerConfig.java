@@ -87,7 +87,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 2
     )
     default boolean partyOverlayOfflineMembersLast() {
-        return false;
+        return true;
     }
 
     @ConfigItem(
@@ -109,7 +109,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 4
     )
     default boolean partyOverlayFadeOutOfVicinity() {
-        return true;
+        return false;
     }
 
     @Range(min = 1)
@@ -132,7 +132,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 6
     )
     default boolean partyOverlayHideOutOfVicinity() {
-        return true;
+        return false;
     }
 
     @Range(min = 1)
@@ -375,7 +375,7 @@ public interface GroupScapeTrackerConfig extends Config {
             position = 0
     )
     default boolean raidMarkersEnabled() {
-        return false;
+        return true;
     }
 
     @ConfigSection(
@@ -710,7 +710,7 @@ public interface GroupScapeTrackerConfig extends Config {
             section = notificationsSection
     )
     default boolean notifyMemberOnline() {
-        return false;
+        return true;
     }
 
     @ConfigItem(
@@ -720,7 +720,7 @@ public interface GroupScapeTrackerConfig extends Config {
             section = notificationsSection
     )
     default boolean notifyMemberOffline() {
-        return false;
+        return true;
     }
 
     @ConfigItem(
@@ -730,7 +730,7 @@ public interface GroupScapeTrackerConfig extends Config {
             section = notificationsSection
     )
     default boolean notifyLowHp() {
-        return false;
+        return true;
     }
 
     @Range(min = 1, max = 99)
@@ -751,7 +751,7 @@ public interface GroupScapeTrackerConfig extends Config {
             section = notificationsSection
     )
     default boolean notifyBossKill() {
-        return false;
+        return true;
     }
 
     @ConfigItem(

@@ -208,8 +208,30 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private static final int CHATBOX_ENTERED = 681;
     private static final int GROUP_STORAGE_LOADER = 293;
 
+    private static final String DEFAULTS_MIGRATION_1_8_14_KEY = "defaultsMigration_1_8_14";
+
+    private void migrateDefaults_1_8_14()
+    {
+        if (configManager.getConfiguration("GroupScapeTracker", DEFAULTS_MIGRATION_1_8_14_KEY) != null)
+        {
+            return;
+        }
+
+        configManager.setConfiguration("GroupScapeTracker", "partyOverlayOfflineMembersLast", true);
+        configManager.setConfiguration("GroupScapeTracker", "partyOverlayFadeOutOfVicinity", false);
+        configManager.setConfiguration("GroupScapeTracker", "partyOverlayHideOutOfVicinity", false);
+        configManager.setConfiguration("GroupScapeTracker", "raidMarkersEnabled", true);
+        configManager.setConfiguration("GroupScapeTracker", "notifyMemberOnline", true);
+        configManager.setConfiguration("GroupScapeTracker", "notifyMemberOffline", true);
+        configManager.setConfiguration("GroupScapeTracker", "notifyLowHp", true);
+        configManager.setConfiguration("GroupScapeTracker", "notifyBossKill", true);
+
+        configManager.setConfiguration("GroupScapeTracker", DEFAULTS_MIGRATION_1_8_14_KEY, true);
+    }
+
     @Override
     protected void startUp() throws Exception {
+        migrateDefaults_1_8_14();
         collectionLogWidgetSubscriber.startUp();
 
         rosterState = new RosterState();

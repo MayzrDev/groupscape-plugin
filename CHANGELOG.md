@@ -2,6 +2,13 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.14] - 2026-09-04
+
+### Changed
+- Raid markers are now on by default (this one-time change also applies to existing installs, unless you'd already switched it off yourself).
+- The party overlay no longer hides or fades group members out of vicinity by default, and now sorts offline members to the bottom by default (also applied once to existing installs).
+- Member online/offline, low HP, and boss kill notifications are now on by default (also applied once to existing installs).
+
 ## [1.8.13] - 2026-09-04
 
 ### Fixed
