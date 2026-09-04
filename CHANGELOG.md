@@ -6,6 +6,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Some collection log unlocks (notably boss uniques, e.g. Awakener's orb from Leviathan) could still fail to sync to the Activity Feed until you next opened your Collection Log, even after the previous inventory-diff fix - the plugin now also cross-checks your kill loot directly as a second, independent way to identify the unlocked item.
+- Slayer task progress now accounts for Mortimer's bonus/reduced kill count modifiers (e.g. "+65 kills") in the total shown, instead of only tracking the original assigned amount.
 
 ## [1.8.10] - 2026-09-03
 

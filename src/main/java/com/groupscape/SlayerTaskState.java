@@ -61,8 +61,19 @@ public class SlayerTaskState implements ConsumableState {
         this.taskId = taskId;
         this.hasTask = taskId > 0;
         this.amountRemaining = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
-        this.initialAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
         this.points = client.getVarbitValue(VarbitID.SLAYER_POINTS);
+
+        // Mortimer (and possibly other masters) can modify the assigned count up or down (e.g.
+        // "+65 kills") via SLAYER_MODIFIER_ID == 2; SLAYER_COUNT_ORIGINAL alone only reflects the
+        // pre-modifier base amount, but SLAYER_COUNT (remaining) already accounts for the modifier,
+        // so only the initial/total needs adjusting here. Ported from RuneLite core's SlayerPlugin.
+        int initialAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
+        if (client.getVarbitValue(VarbitID.SLAYER_MODIFIER_ID) == 2) {
+            boolean isNegative = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_NEGATIVE) == 1;
+            int modifierValue = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_VALUE);
+            initialAmount += isNegative ? -modifierValue : modifierValue;
+        }
+        this.initialAmount = initialAmount;
 
         // Krystilia (wilderness) and Mortimer (Managing Miscellania hard diary reward) keep their
         // own separate "tasks completed" counters instead of feeding the regular one - ported
