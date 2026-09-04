@@ -797,8 +797,16 @@ public class PartyFrameOverlay extends Overlay {
     }
 
     private void sortMembers(List<RosterMember> members) {
+        Map<RosterMember, Integer> joinOrder = new LinkedHashMap<>();
+        for (int i = 0; i < members.size(); i++) {
+            joinOrder.put(members.get(i), i);
+        }
+
         Comparator<RosterMember> comparator;
         switch (config.partyOverlaySortOrder()) {
+            case JOIN_ORDER_REVERSED:
+                comparator = Comparator.<RosterMember>comparingInt(joinOrder::get).reversed();
+                break;
             case ALPHABETICAL:
                 comparator = Comparator.comparing(m -> m.name.toLowerCase());
                 break;
@@ -807,7 +815,8 @@ public class PartyFrameOverlay extends Overlay {
                 break;
             case JOIN_ORDER:
             default:
-                return; // roster order already reflects join order
+                comparator = Comparator.comparingInt(joinOrder::get);
+                break;
         }
 
         if (config.partyOverlayOfflineMembersLast()) {

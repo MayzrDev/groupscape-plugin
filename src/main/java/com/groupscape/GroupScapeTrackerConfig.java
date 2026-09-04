@@ -53,6 +53,7 @@ public interface GroupScapeTrackerConfig extends Config {
 
     enum PartyOverlaySortOrder {
         JOIN_ORDER,
+        JOIN_ORDER_REVERSED,
         ALPHABETICAL,
         LOWEST_HP_FIRST
     }
@@ -526,6 +527,7 @@ public interface GroupScapeTrackerConfig extends Config {
 
     enum SidepanelSortOrder {
         JOIN_ORDER,
+        JOIN_ORDER_REVERSED,
         ALPHABETICAL,
         LOWEST_HP_FIRST
     }

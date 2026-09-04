@@ -2,6 +2,14 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.15] - 2026-09-05
+
+### Fixed
+- "Offline members last" was being ignored on both the party overlay and side panel when the sort order was set to Join order (the default), so offline members no longer sorted to the bottom in that mode.
+
+### Added
+- New sort order option, Join order (reversed), for both the party overlay and side panel.
+
 ## [1.8.14] - 2026-09-04
 
 ### Changed

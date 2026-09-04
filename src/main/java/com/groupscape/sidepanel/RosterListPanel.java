@@ -131,8 +131,16 @@ public class RosterListPanel extends JPanel implements Scrollable {
     }
 
     private void sortMembers(List<RosterMember> members, String localPlayerName) {
+        Map<RosterMember, Integer> joinOrder = new LinkedHashMap<>();
+        for (int i = 0; i < members.size(); i++) {
+            joinOrder.put(members.get(i), i);
+        }
+
         Comparator<RosterMember> comparator;
         switch (config.sidepanelSortOrder()) {
+            case JOIN_ORDER_REVERSED:
+                comparator = Comparator.<RosterMember>comparingInt(joinOrder::get).reversed();
+                break;
             case ALPHABETICAL:
                 comparator = Comparator.comparing(m -> m.name.toLowerCase());
                 break;
@@ -141,7 +149,8 @@ public class RosterListPanel extends JPanel implements Scrollable {
                 break;
             case JOIN_ORDER:
             default:
-                return; // roster order already reflects join order
+                comparator = Comparator.comparingInt(joinOrder::get);
+                break;
         }
 
         if (config.sidepanelOfflineMembersLast()) {
