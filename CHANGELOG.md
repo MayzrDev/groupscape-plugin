@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.13] - 2026-09-04
+
+### Fixed
+- Slayer master no longer disappears from the side panel for tasks assigned by Mortimer or Krystilia when the game client (or the plugin) restarts mid-task, since the master name previously had to wait for you to talk to them again before it would reappear.
+
 ## [1.8.12] - 2026-09-04
 
 ### Fixed

@@ -94,7 +94,9 @@ public class SlayerTaskState implements ConsumableState {
         if (hasTask) {
             boolean samePreviousTask = previous != null && previous.hasTask && previous.taskId == taskId;
 
-            this.masterName = masterName;
+            this.masterName = masterName != null
+                    ? masterName
+                    : (samePreviousTask ? previous.masterName : resolveMasterNameFromOrdinal(master));
 
             String resolvedTaskName = resolveTaskName(client, taskId);
             this.taskName = resolvedTaskName != null
@@ -110,6 +112,25 @@ public class SlayerTaskState implements ConsumableState {
             this.masterName = null;
             this.taskName = null;
             this.taskLocation = null;
+        }
+    }
+
+    /**
+     * {@code VarbitID#SLAYER_MASTER} isn't a full index into the master list (see this class's
+     * javadoc), but two of its values are confirmed constants ported from RuneLite core's
+     * SlayerPlugin (used there to pick the right streak counter, see the switch above) - reused
+     * here as an immediate fallback for these two masters specifically when dialogue capture
+     * hasn't named the master yet (e.g. right after a client/plugin restart mid-task), rather than
+     * leaving masterName null until the player next talks to them.
+     */
+    private static String resolveMasterNameFromOrdinal(int master) {
+        switch (master) {
+            case 7:
+                return "Krystilia";
+            case 10:
+                return "Mortimer";
+            default:
+                return null;
         }
     }
 
