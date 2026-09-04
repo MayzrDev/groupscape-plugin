@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.16] - 2026-09-05
+
+### Fixed
+- Opening your collection log to browse it no longer gets treated the same as actually unlocking a new item, so it won't show up as a fresh drop notification - only items you actually just received are reported that way.
+
 ## [1.8.15] - 2026-09-05
 
 ### Fixed
@@ -86,15 +91,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Fixed collection log unlocks not syncing to your group until you next opened your collection log - new items now sync as soon as you get them.
 - Fixed deaths (and any kill/loot alongside them) sometimes not appearing in the Activity Feed, toasts, or Discord at all - a too-strict check meant to filter out spurious death animations could also misfire on real deaths.
 
-## [1.8.5] - 2026-09-01
-
-### Added
-- Finishing a raid (Chambers of Xeric, Theatre of Blood, or Tombs of Amascut) now reports it to your group's Activity Feed, along with the difficulty and how much the reward chest was worth.
-
-### Fixed
-- Discord boss kill notifications now show your account's real kill count (read from the "kill count is" chat message) instead of a count of kills GroupScape happened to see logged on its own server.
-- Fixed loot going missing from the Activity Feed (and its Discord notification) for bosses that split their drop across more than one loot roll per kill, such as Vet'ion - only the first roll was being kept before.
-- Fixed kills, loot, and deaths sometimes appearing twice in the Activity Feed and Discord (with a duplicated kill count / loot value) right around a GroupScape server restart.
+[1.8.5] — Raid Completions To Activity Feed, Kill Count Fixes
 
 ## [1.8.4] - 2026-08-31
 

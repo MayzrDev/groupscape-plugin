@@ -160,8 +160,9 @@ public class CollectionLogWidgetSubscriber {
 
         // Real quantity (for stackable log entries) is only known once the log widget is
         // scanned; this just registers the unlock immediately so it isn't lost until the
-        // player next opens the log. onScriptPreFired below overwrites it with the true count.
-        collectionLogV2Manager.storeClogItem(resolvedItemId, 1);
+        // player next opens the log. onScriptPreFired below overwrites it with the true count,
+        // while keeping it flagged as a live drop rather than a plain sync hit.
+        collectionLogV2Manager.storeLiveClogItem(resolvedItemId, 1);
         pendingItemName = null;
         inventorySnapshot = null;
         pendingItemTick = -1;
@@ -175,7 +176,7 @@ public class CollectionLogWidgetSubscriber {
             ItemComposition composition = itemManager.getItemComposition(item.getId());
             if (!composition.getName().equalsIgnoreCase(pendingItemName)) continue;
 
-            collectionLogV2Manager.storeClogItem(item.getId(), 1);
+            collectionLogV2Manager.storeLiveClogItem(item.getId(), 1);
             pendingItemName = null;
             inventorySnapshot = null;
             pendingItemTick = -1;
@@ -197,7 +198,11 @@ public class CollectionLogWidgetSubscriber {
 
     @Subscribe
     public void onScriptPreFired(ScriptPreFired pre) {
-        // Script 4100 fires when collection log items are enumerated via search
+        // Script 4100 fires when collection log items are enumerated via search - this covers
+        // both the drop-triggered scan above (confirming a live item's true count) and a plain
+        // manual open/browse of the log, which enumerates the player's whole log regardless of
+        // whether anything is actually new. storeScannedClogItem tells those two apart by
+        // checking confirmedLiveIds, so a manual check-in doesn't get reported as a fresh drop.
         if (pre.getScriptId() == 4100) {
             // Arguments: [widgetId, itemId, qty]
             Object[] args = pre.getScriptEvent().getArguments();
@@ -205,7 +210,7 @@ public class CollectionLogWidgetSubscriber {
                 try {
                     int itemId = (int) args[1];
                     int quantity = (int) args[2];
-                    collectionLogV2Manager.storeClogItem(itemId, quantity);
+                    collectionLogV2Manager.storeScannedClogItem(itemId, quantity);
                 } catch (Exception ignored) {
                     //
                 }
