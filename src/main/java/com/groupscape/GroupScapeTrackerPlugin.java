@@ -1595,18 +1595,44 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
     }
 
+    /**
+     * How long {@code getInteracting()} must stay null (outside of dialogue) before the plugin
+     * actually pushes a "not interacting" clear - see {@link #notInteractingSinceMillis}. Without
+     * this, bouncing in and out of melee range on a boss (a hit lands, target briefly nulls,
+     * then re-engages) would flicker the target bar off and back on every time.
+     */
+    private static final long INTERACTING_CLEAR_DEBOUNCE_MILLIS = 10_000;
+
+    /**
+     * When {@code getInteracting()} first went null this "not interacting" streak, or 0 if the
+     * player is currently interacting (or mid-dialogue). Reset the instant a real target
+     * reappears, so a brief gap never accumulates toward the debounce below.
+     */
+    private long notInteractingSinceMillis;
+
     private void updateInteracting() {
         Player player = client.getLocalPlayer();
         if (player == null) return;
 
+        String playerName = player.getName();
         Actor actor = player.getInteracting();
         if (actor != null) {
-            String playerName = player.getName();
+            notInteractingSinceMillis = 0;
             dataManager.getInteracting().update(new InteractingState(playerName, actor, client));
 
             if (actor instanceof NPC) {
                 NPC npc = (NPC) actor;
                 dataManager.getNpcDialogueTracker().observe(npc.getId(), npc.getName(), npc.getCombatLevel());
+            }
+        } else if (!isDialogueOpen()) {
+            // getInteracting() also goes null the instant a dialogue box opens (see
+            // NpcDialogueTracker) even though the player is still "talking to" whoever they
+            // targeted, so only start the clear debounce once that box is actually closed too -
+            // otherwise the target bar would blank out mid-conversation.
+            if (notInteractingSinceMillis == 0) {
+                notInteractingSinceMillis = System.currentTimeMillis();
+            } else if (System.currentTimeMillis() - notInteractingSinceMillis >= INTERACTING_CLEAR_DEBOUNCE_MILLIS) {
+                dataManager.getInteracting().update(InteractingState.notInteracting(playerName));
             }
         }
 

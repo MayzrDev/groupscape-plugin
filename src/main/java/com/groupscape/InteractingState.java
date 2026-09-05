@@ -9,6 +9,14 @@ import net.runelite.api.coords.WorldPoint;
 
 public class InteractingState implements ConsumableState {
     private final transient String playerName;
+
+    // Distinguishes an explicit "not interacting with anything" push from a real target, so the
+    // server can tell "cleared" apart from "no update this batch" (which otherwise both look like
+    // an absent field) and actually null out the target instead of replaying the last real one
+    // forever. An empty name is what the server keys off of - see update_batcher.rs's
+    // merge_group_member and its interacting COALESCE.
+    private final transient boolean cleared;
+
     @Getter
     private final String name;
     @Getter
@@ -20,6 +28,7 @@ public class InteractingState implements ConsumableState {
 
     public InteractingState(String playerName, Actor actor, Client client) {
         this.playerName = playerName;
+        this.cleared = false;
 
         // Non-combat NPCs (bankers, quest givers, Tool Leprechauns, etc.) can flash a
         // stale/default healthbar ratio from RuneLite for a tick even though they're not
@@ -33,6 +42,20 @@ public class InteractingState implements ConsumableState {
 
         WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, actor.getLocalLocation());
         this.location = new LocationState(playerName, worldPoint, false);
+    }
+
+    private InteractingState(String playerName) {
+        this.playerName = playerName;
+        this.cleared = true;
+        this.name = "";
+        this.scale = 0;
+        this.ratio = -1;
+        this.location = new LocationState(playerName, new WorldPoint(0, 0, 0), false);
+    }
+
+    /** An explicit "no target" push - see {@link #cleared}. */
+    public static InteractingState notInteracting(String playerName) {
+        return new InteractingState(playerName);
     }
 
     private static boolean isAttackable(NPC npc) {
@@ -59,9 +82,11 @@ public class InteractingState implements ConsumableState {
         if (o == this) return true;
         if (!(o instanceof InteractingState)) return false;
 
-        // NOTE: For interactions, we want to keep sending the data until the player stops interacting
-        // even if nothing changed about what is being interacted with. The UI will handle not showing
-        // the interaction once it goes stale from the player not interacting with anything.
-        return false;
+        // NOTE: For real interactions, we want to keep sending the data every tick until the
+        // player stops, even if nothing changed about what's being interacted with - the UI
+        // handles not showing the interaction once it goes stale. But once cleared, there's
+        // nothing further to say - repeated clears are equal so they don't spam an update every
+        // tick after the target actually goes away.
+        return this.cleared && ((InteractingState) o).cleared;
     }
 }

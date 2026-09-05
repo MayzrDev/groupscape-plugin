@@ -99,7 +99,11 @@ public class PartyFrameOverlay extends Overlay {
     // the ring, not inside it, so padding/row-gap both need to clear this or they overflow the
     // panel/collide with the next row instead of just the orb's footprint.
     private static final int ORB_PIP_OVERHANG = ORB_PIP_GAP + ORB_PIP_RADIUS * 2;
-    private static final int ORB_PADDING = ORB_PIP_OVERHANG + 1;
+    // Pure visual gap from the panel edge to an orb's bounding box - kept separate from
+    // ORB_PIP_OVERHANG so the top of the grid (nothing hangs above an orb) and the bottom
+    // (the last row's pips hang past their box) end up with the same visible clearance;
+    // see the height calc in renderOrbGrid, which adds ORB_PIP_OVERHANG once for the bottom.
+    private static final int ORB_PADDING = NORMAL_PADDING;
     private static final int ORB_GAP = ORB_PIP_OVERHANG + 1;
 
     // Scoreboard turns the panel sideways: members sit in narrow side-by-side columns instead of
@@ -358,7 +362,7 @@ public class PartyFrameOverlay extends Overlay {
         int width = ORB_PADDING * 2 + cols * (ORB_SIZE + ORB_GAP) - ORB_GAP;
         int gridHeight = rows * (ORB_SIZE + ORB_GAP) - ORB_GAP;
         int footerHeight = extraCount > 0 ? ORB_FOOTER_HEIGHT : 0;
-        int height = ORB_PADDING * 2 + gridHeight + footerHeight;
+        int height = ORB_PADDING * 2 + gridHeight + ORB_PIP_OVERHANG + footerHeight;
 
         drawChrome(graphics, width, height);
         graphics.setFont(FontManager.getRunescapeSmallFont().deriveFont(Font.BOLD, ORB_SIZE * 0.28f));
@@ -383,7 +387,7 @@ public class PartyFrameOverlay extends Overlay {
         if (extraCount > 0) {
             graphics.setColor(MUTED_TEXT);
             FontMetrics metrics = graphics.getFontMetrics();
-            int footerY = ORB_PADDING + gridHeight + (footerHeight + metrics.getAscent() - metrics.getDescent()) / 2;
+            int footerY = ORB_PADDING + gridHeight + ORB_PIP_OVERHANG + (footerHeight + metrics.getAscent() - metrics.getDescent()) / 2;
             graphics.drawString("+" + extraCount + " more", ORB_PADDING, footerY);
         }
 

@@ -10,6 +10,8 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - Opening your collection log to browse it no longer gets treated the same as actually unlocking a new item, so it won't show up as a fresh drop notification - only items you actually just received are reported that way.
 - Boss kills with a slower death animation (e.g. Vardorvis) no longer occasionally get reported without their loot attached - the plugin now waits briefly for the loot to arrive before finalizing the kill.
+- Your target no longer flickers off and back on in the party overlay/side panel during brief gaps in combat (e.g. a hit landing mid-fight); it now clears properly a few seconds after you actually stop interacting.
+- Fixed the party overlay's health orb pips getting clipped at the top and bottom edges of the panel.
 
 ## [1.8.15] - 2026-09-05
 
