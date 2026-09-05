@@ -18,8 +18,12 @@ import java.util.UUID;
  * a same-name {@code LootReceived} arriving after {@code NpcDespawned} attaches straight to
  * the held {@link PendingKill}; one arriving *before* it (loot is typically granted before the
  * corpse actually despawns) is buffered in {@link #pendingUnmatchedLoot} and claimed by the
- * next matching {@link #onKill}. If neither ever pairs up before the next drain, the kill still
- * ships without loot and the loot is dropped rather than held back indefinitely.
+ * next matching {@link #onKill}. A freshly-captured, still loot-less {@link PendingKill} is held
+ * back from the drain for {@link #LOOT_GRACE_MILLIS} (see {@link #consumeState}) rather than
+ * shipped immediately, so a {@code LootReceived} that lands a moment after the despawn (observed
+ * for bosses with a longer death animation, e.g. Vardorvis) still has a chance to attach before
+ * the kill goes out loot-less. Once that grace period elapses with no match, the kill ships
+ * without loot and the loot is dropped rather than held back indefinitely.
  *
  * Chest/clue loot (see {@link #onChestOrClueLoot}) is unrelated to that correlation - it has
  * no kill to attach to, so it's queued and drained as its own standalone "loot"-typed event
@@ -38,6 +42,10 @@ public class KillLootDeathEvents {
     /** Bound on {@link #pendingUnmatchedLoot} so a kill that never despawns (e.g. NPC leaves
      * the area) can't leak memory - the oldest unmatched loot is dropped once this is hit. */
     private static final int MAX_UNMATCHED_LOOT = 20;
+
+    /** How long a loot-less {@link PendingKill} is held back from the drain in {@link #consumeState}
+     * to give a late-arriving same-name {@code LootReceived} a chance to attach (see class doc). */
+    private static final long LOOT_GRACE_MILLIS = 2000;
 
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
@@ -90,6 +98,9 @@ public class KillLootDeathEvents {
         // the identical id and the server can recognize it as a replay rather than a new kill
         // (see DataManager.restoreStateIfNothingUpdated).
         final String eventId;
+        // Wall-clock capture time, purely local bookkeeping for the LOOT_GRACE_MILLIS hold in
+        // consumeState - unlike occurredAt this is never sent to the server.
+        final long createdAtMillis;
         List<Map<String, Object>> loot;
         Integer accountKc;
 
@@ -102,6 +113,7 @@ public class KillLootDeathEvents {
             this.world = world;
             this.occurredAt = Instant.now().toString();
             this.eventId = UUID.randomUUID().toString();
+            this.createdAtMillis = System.currentTimeMillis();
         }
 
         Map<String, Object> toMap() {
@@ -256,22 +268,43 @@ public class KillLootDeathEvents {
         String whoIsUpdating = (String) output.get("name");
         if (owner == null || !owner.equals(whoIsUpdating)) return;
 
-        List<Map<String, Object>> events = new ArrayList<>();
+        // Loot-less kills younger than LOOT_GRACE_MILLIS are held back (see class doc) rather
+        // than shipped immediately, giving a late LootReceived a chance to still attach.
+        long now = System.currentTimeMillis();
+        List<PendingKill> readyKills = new ArrayList<>();
+        List<PendingKill> stillWaiting = new ArrayList<>();
         for (PendingKill kill : pendingKills) {
+            if (kill.loot != null || now - kill.createdAtMillis >= LOOT_GRACE_MILLIS) {
+                readyKills.add(kill);
+            } else {
+                stillWaiting.add(kill);
+            }
+        }
+
+        if (readyKills.isEmpty() && pendingDeaths.isEmpty() && pendingLoot.isEmpty()) return;
+
+        List<Map<String, Object>> events = new ArrayList<>();
+        for (PendingKill kill : readyKills) {
             events.add(kill.toMap());
         }
         events.addAll(pendingDeaths);
         events.addAll(pendingLoot);
         output.put("events", events);
 
-        consumedKills = pendingKills.isEmpty() ? null : new ArrayList<>(pendingKills);
+        consumedKills = readyKills.isEmpty() ? null : new ArrayList<>(readyKills);
         consumedDeaths = pendingDeaths.isEmpty() ? null : new ArrayList<>(pendingDeaths);
         consumedLoot = pendingLoot.isEmpty() ? null : new ArrayList<>(pendingLoot);
         consumedOwner = owner;
         pendingKills.clear();
+        pendingKills.addAll(stillWaiting);
         pendingDeaths.clear();
         pendingLoot.clear();
-        owner = null;
+        // Only release the owner gate once nothing of this player's is left pending - a still-
+        // waiting kill needs owner to keep matching whoIsUpdating on the next consumeState call,
+        // otherwise it would get stuck here forever (onKill is the only other thing that sets it).
+        if (stillWaiting.isEmpty()) {
+            owner = null;
+        }
     }
 
     public synchronized void restoreState() {

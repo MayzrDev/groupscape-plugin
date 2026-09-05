@@ -86,7 +86,7 @@ public class RaidCompletionEventsTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> difficulty = (Map<String, Object>) queued.get(0).get("difficulty");
         assertEquals("level", difficulty.get("kind"));
-        assertFalse(difficulty.containsKey("level"));
+        assertEquals(-1, difficulty.get("level"));
     }
 
     @Test

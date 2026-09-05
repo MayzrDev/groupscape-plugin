@@ -4,8 +4,12 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ## [1.8.16] - 2026-09-05
 
+### Added
+- Tombs of Amascut raid completions now report your actual invocation/raid level instead of always showing it as unknown.
+
 ### Fixed
 - Opening your collection log to browse it no longer gets treated the same as actually unlocking a new item, so it won't show up as a fresh drop notification - only items you actually just received are reported that way.
+- Boss kills with a slower death animation (e.g. Vardorvis) no longer occasionally get reported without their loot attached - the plugin now waits briefly for the loot to arrive before finalizing the kill.
 
 ## [1.8.15] - 2026-09-05
 

@@ -58,7 +58,11 @@ public class RaidCompletionEvents {
                 if (mode != null) {
                     map.put("mode", mode);
                 }
-            } else if (level >= 0) {
+            } else {
+                // Always send level, even when unresolved (-1) - the server model requires this
+                // field, so omitting it fails deserialization of the entire heartbeat, not just
+                // this raid. The server already treats a negative/unresolved level as its lowest
+                // tier and hides it from the display suffix, so -1 is a safe "unknown" sentinel.
                 map.put("level", level);
             }
             return map;

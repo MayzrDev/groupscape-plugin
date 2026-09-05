@@ -1463,13 +1463,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
     }
 
     /**
-     * TODO: unresolved - the numeric ToA invocation level isn't carried by the completion chat
-     * line (it only ever names a coarse mode), and this server hasn't confirmed which varbit or
-     * reward-interface widget exposes the raw invocation-point total. Returns -1 ("unknown
-     * level") until that's pinned down; wire up the real varbit/widget read here once confirmed.
+     * The numeric ToA invocation level isn't carried by the completion chat line (it only ever
+     * names a coarse mode), so it's read straight from {@link Varbits#TOA_RAID_LEVEL} instead -
+     * this tracks the party's raid level (base 100 + invocation points) for the raid just
+     * finished and is still set when the completion chat line fires. Falls back to -1 ("unknown
+     * level") if read outside a raid, where the varbit is 0.
      */
     private int resolveToaInvocationLevel() {
-        return -1;
+        int level = client.getVarbitValue(Varbits.TOA_RAID_LEVEL);
+        return level > 0 ? level : -1;
     }
 
     /**
