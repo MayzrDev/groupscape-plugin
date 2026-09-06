@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.17] - 2026-09-06
+
+### Added
+- Opening a Hunters' loot sack from Hunters' rumours (any tier) now shows up in the group's loot log.
+
 ## [1.8.16] - 2026-09-05
 
 ### Added

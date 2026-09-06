@@ -28,7 +28,11 @@ public final class ChestLootSourceNames {
             "Tempoross",
             "Zalcano",
             "Guardians of the Rift",
-            "Fortis Colosseum"
+            "Fortis Colosseum",
+            "Hunters' loot sack (basic)",
+            "Hunters' loot sack (adept)",
+            "Hunters' loot sack (expert)",
+            "Hunters' loot sack (master)"
     ));
 
     public static boolean isTrackedChest(String sourceName) {
