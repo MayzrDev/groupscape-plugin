@@ -98,6 +98,8 @@ public class DataManager {
     private final NotableDropEvents notableDropEvents = new NotableDropEvents();
     @Getter
     private final RaidCompletionEvents raidCompletionEvents = new RaidCompletionEvents();
+    @Getter
+    private final ComboKillEvents comboKillEvents = new ComboKillEvents();
 
     public void submitToApi() {
         if (client.getLocalPlayer() == null || client.getLocalPlayer().getName() == null || isBadWorldType()) return;

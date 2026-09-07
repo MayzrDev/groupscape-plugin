@@ -103,6 +103,10 @@ public class KillLootDeathEvents {
         final long createdAtMillis;
         List<Map<String, Object>> loot;
         Integer accountKc;
+        // Non-null only for a combo kill synthesized by ComboKillEvents (e.g. "Barrows"/"Moons of
+        // Peril") - the short display labels of whichever sub-bosses were actually killed that
+        // run, in kill order. Absent for every ordinary single-NPC kill.
+        List<String> subKills;
 
         PendingKill(int npcId, String npcName, int worldX, int worldY, int plane, int world) {
             this.npcId = npcId;
@@ -133,6 +137,9 @@ public class KillLootDeathEvents {
             if (accountKc != null) {
                 event.put("accountKc", accountKc);
             }
+            if (subKills != null) {
+                event.put("subKills", subKills);
+            }
             return event;
         }
     }
@@ -159,6 +166,20 @@ public class KillLootDeathEvents {
             }
         }
         pendingKills.add(kill);
+    }
+
+    /**
+     * Like {@link #onKill}, but for a combo kill synthesized by {@link ComboKillEvents} once its
+     * shared reward chest is looted (e.g. "Barrows", "Moons of Peril") - {@code npcName} is the
+     * combo's own synthetic name, not a real despawned NPC, and {@code subKills} names whichever
+     * sub-bosses were actually killed that run. The caller must immediately follow this with
+     * {@link #onLoot} for the same {@code npcName} so the chest's loot attaches, exactly like an
+     * ordinary kill.
+     */
+    public synchronized void onComboKill(String playerName, int npcId, String npcName, List<String> subKills,
+                                          int worldX, int worldY, int plane, int world) {
+        onKill(playerName, npcId, npcName, worldX, worldY, plane, world);
+        pendingKills.get(pendingKills.size() - 1).subKills = subKills;
     }
 
     /**

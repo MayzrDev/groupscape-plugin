@@ -1287,6 +1287,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
         String playerName = client.getLocalPlayer().getName();
         dataManager.getKillLootDeathEvents().onKill(playerName, npc.getId(), name, wp.getX(), wp.getY(), wp.getPlane(), client.getWorld());
+        // Alongside (not instead of) the ordinary kill above - see ComboKillEvents' class doc for
+        // why Barrows brothers/Moons of Peril moons still get their own silent kill on top of the
+        // combined entry this contributes to.
+        dataManager.getComboKillEvents().onSubBossDespawned(name);
     }
 
     /**
@@ -1324,8 +1328,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
             String clueTier = ClueTier.extractTier(event.getName());
             boolean isClue = clueTier != null;
             boolean isRaidChest = !isClue && RAID_CHEST_NAMES.contains(event.getName());
-            boolean isChest = !isClue && !isRaidChest && ChestLootSourceNames.isTrackedChest(event.getName());
-            if (isRaidChest || isClue || isChest) {
+            // Checked ahead of ChestLootSourceNames' broader chest handling for the same reason as
+            // isRaidChest above - a combo chest's loot is claimed by ComboKillEvents instead of
+            // also being logged as a standalone chest "loot" event.
+            boolean isComboChest = !isClue && !isRaidChest && ComboKillEvents.isComboChestName(event.getName());
+            boolean isChest = !isClue && !isRaidChest && !isComboChest && ChestLootSourceNames.isTrackedChest(event.getName());
+            if (isRaidChest || isClue || isComboChest || isChest) {
                 Player local = client.getLocalPlayer();
                 WorldPoint wp = local == null ? null : local.getWorldLocation();
                 if (wp != null) {
@@ -1340,6 +1348,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
                         claimedByRaidCompletion = dataManager.getRaidCompletionEvents().onRaidChestLoot(
                                 local.getName(), event.getName(),
                                 wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(), items);
+                    } else if (isComboChest) {
+                        dataManager.getComboKillEvents().onComboChestLoot(
+                                local.getName(), event.getName(), wp.getX(), wp.getY(), wp.getPlane(), client.getWorld(),
+                                items, dataManager.getKillLootDeathEvents());
                     } else {
                         dataManager.getKillLootDeathEvents().onChestOrClueLoot(
                                 local.getName(), isClue ? "clue" : "chest", event.getName(), clueTier,

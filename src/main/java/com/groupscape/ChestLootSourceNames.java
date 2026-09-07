@@ -11,6 +11,11 @@ import java.util.Set;
  * raids), unlike the {@code NpcDespawned}-based kill-detection in
  * {@link com.groupscape.GroupScapeTrackerPlugin#onNpcDespawned}.
  *
+ * Doesn't include the raid chests ({@code RAID_CHEST_NAMES} in
+ * {@link com.groupscape.GroupScapeTrackerPlugin}) or the combo chests ({@link ComboKillEvents}) -
+ * both are checked ahead of this class in {@code onLootReceived} and claimed by their own
+ * dedicated handling instead.
+ *
  * Kept in sync with the server's chest-loot allowlist (server/src/loot_sources.rs).
  */
 public final class ChestLootSourceNames {
@@ -21,7 +26,6 @@ public final class ChestLootSourceNames {
             "Chambers of Xeric",
             "Theatre of Blood",
             "Tombs of Amascut",
-            "Barrows",
             "The Gauntlet",
             "The Corrupted Gauntlet",
             "Wintertodt",
