@@ -36,13 +36,22 @@ public class ComboKillEvents {
         final String combinedNpcName;
         final int sentinelNpcId;
         final Map<String, String> shortLabelsByNpcName;
+        // True (Barrows) means an empty/stale pending label list is treated as "no verified kills
+        // this attempt" and the chest loot is dropped rather than logged (see onComboChestLoot) -
+        // Barrows brothers reliably despawn at 0hp so an empty list really does mean nothing died.
+        // False (Moons of Peril) means the chest loot is logged unconditionally, labels or not:
+        // the moons never reliably hit 0hp via onNpcDespawned (they finish through an "Enraged"
+        // transform - see GroupScapeTrackerPlugin#onNpcDespawned's javadoc on mid-fight transforms),
+        // so requiring a verified label first would mean the combo entry almost never fires at all.
+        final boolean requireVerifiedSubKills;
 
         ComboDefinition(String chestLootName, String combinedNpcName, int sentinelNpcId,
-                         Map<String, String> shortLabelsByNpcName) {
+                         Map<String, String> shortLabelsByNpcName, boolean requireVerifiedSubKills) {
             this.chestLootName = chestLootName;
             this.combinedNpcName = combinedNpcName;
             this.sentinelNpcId = sentinelNpcId;
             this.shortLabelsByNpcName = shortLabelsByNpcName;
+            this.requireVerifiedSubKills = requireVerifiedSubKills;
         }
     }
 
@@ -59,13 +68,13 @@ public class ComboKillEvents {
                     "Guthan the Infested", "Guthan",
                     "Karil the Tainted", "Karil",
                     "Torag the Corrupted", "Torag",
-                    "Verac the Defiled", "Verac"));
+                    "Verac the Defiled", "Verac"), true);
 
     private static final ComboDefinition MOONS_OF_PERIL = new ComboDefinition(
             "Lunar Chest", "Moons of Peril", MOONS_OF_PERIL_SENTINEL_NPC_ID, mapOf(
                     "Blue Moon", "Blue",
                     "Eclipse Moon", "Eclipse",
-                    "Blood Moon", "Blood"));
+                    "Blood Moon", "Blood"), false);
 
     private static final ComboDefinition[] COMBOS = { BARROWS, MOONS_OF_PERIL };
 
@@ -135,13 +144,18 @@ public class ComboKillEvents {
             if (pending != null) {
                 dropIfStale(pending);
             }
-            // Empty/stale pending set: nothing verified as killed this run, so nothing is logged
-            // (no misleading empty-bracket or guessed-full-run entry) - the chest loot itself is
-            // still consumed as "claimed" so it doesn't also fall through to a standalone chest
-            // loot event with no sub-boss context.
-            if (pending != null && !pending.labelsInKillOrder.isEmpty()) {
+            List<String> labels = pending != null ? new ArrayList<>(pending.labelsInKillOrder) : new ArrayList<>();
+            // Empty/stale pending set on a combo that requires verified sub-kills (Barrows):
+            // nothing verified as killed this run, so nothing is logged (no misleading empty-
+            // bracket or guessed-full-run entry) - the chest loot itself is still consumed as
+            // "claimed" so it doesn't also fall through to a standalone chest loot event with no
+            // sub-boss context. A combo that doesn't require verification (Moons of Peril) logs
+            // regardless, since its sub-bosses' despawns aren't reliably detectable to begin with
+            // (see ComboDefinition#requireVerifiedSubKills) - an empty label list there just means
+            // no per-moon breakdown, not "nothing happened".
+            if (!labels.isEmpty() || !combo.requireVerifiedSubKills) {
                 killLootDeathEvents.onComboKill(playerName, combo.sentinelNpcId, combo.combinedNpcName,
-                        new ArrayList<>(pending.labelsInKillOrder), worldX, worldY, plane, world);
+                        labels, worldX, worldY, plane, world);
                 killLootDeathEvents.onLoot(combo.combinedNpcName, items);
             }
             return true;

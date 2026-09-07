@@ -10,6 +10,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Changed
 - Individual Barrows brother and Moon kills no longer show up on their own in the activity feed, toast notifications, or Discord kill webhook - only the combined chest-opening entry does now.
 
+### Fixed
+- Moons of Peril reward chest openings were still being silently dropped in some runs - the moons don't reliably die the normal way (they finish through an "Enraged" transform partway through), so the combined entry now logs on chest opening regardless, even without a full per-moon breakdown.
+
 ## [1.8.17] - 2026-09-06
 
 ### Added
