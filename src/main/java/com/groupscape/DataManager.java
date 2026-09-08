@@ -97,6 +97,8 @@ public class DataManager {
     @Getter
     private final NotableDropEvents notableDropEvents = new NotableDropEvents();
     @Getter
+    private final SlayerTaskCloseEvents slayerTaskCloseEvents = new SlayerTaskCloseEvents();
+    @Getter
     private final RaidCompletionEvents raidCompletionEvents = new RaidCompletionEvents();
     @Getter
     private final ComboKillEvents comboKillEvents = new ComboKillEvents();
@@ -141,6 +143,7 @@ public class DataManager {
             interactionEvents.consumeState(updates);
             alertEvents.consumeState(updates);
             notableDropEvents.consumeState(updates);
+            slayerTaskCloseEvents.consumeState(updates);
 
             boolean hasChanges = updates.size() > 1;
             boolean heartbeatDue = System.currentTimeMillis() - lastSentAtMillis >= HEARTBEAT_INTERVAL_MILLIS;
@@ -244,6 +247,7 @@ public class DataManager {
         interactionEvents.restoreState();
         alertEvents.restoreState();
         notableDropEvents.restoreState();
+        slayerTaskCloseEvents.restoreState();
     }
 
     private String baseUrl() {

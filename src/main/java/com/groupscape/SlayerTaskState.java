@@ -179,6 +179,38 @@ public class SlayerTaskState implements ConsumableState {
         return fields.length > 0 ? (String) fields[0] : null;
     }
 
+    // Package-visible accessors for GroupScapeTrackerPlugin's transition detection
+    // (pushSlayerTaskState comparing `previous` against a freshly-built state) - `get()` only
+    // exposes the wire-shaped Map, which doesn't let a caller cheaply inspect a *previous*
+    // instance's fields without re-parsing its own output.
+    boolean hasTask() {
+        return hasTask;
+    }
+
+    int taskId() {
+        return taskId;
+    }
+
+    String masterName() {
+        return masterName;
+    }
+
+    String taskName() {
+        return taskName;
+    }
+
+    int amountRemaining() {
+        return amountRemaining;
+    }
+
+    int initialAmount() {
+        return initialAmount;
+    }
+
+    int points() {
+        return points;
+    }
+
     @Override
     public Object get() {
         Map<String, Object> out = new HashMap<>();

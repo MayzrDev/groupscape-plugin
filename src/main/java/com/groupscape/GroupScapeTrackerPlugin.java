@@ -65,6 +65,7 @@ import javax.inject.Inject;
 import java.awt.Color;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -168,6 +169,15 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@link #checkSlayerTaskUpdate}. Persists across ticks until the next task change - there is
      * no varp/varbit that names the assigning master directly. */
     private String currentSlayerTaskMaster;
+    /** Identity of the task currently being tracked for {@link SlayerTaskCloseEvents} (History/
+     * Stats tabs) - `null` when no task is being tracked, i.e. either there's no active task or
+     * the active one's master/task name hasn't resolved yet (see {@link #handleSlayerTaskTransition}).
+     * Deliberately independent of {@code SlayerTaskState}'s own equality/dedup bookkeeping so a
+     * task whose name only resolves a few ticks late (see {@link SlayerTaskState}'s javadoc)
+     * still gets exactly one assignment event once it does, not zero. */
+    private String currentSlayerTaskEventId;
+    private int currentSlayerTaskId = -1;
+    private String currentSlayerTaskAssignedAt;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
@@ -638,11 +648,106 @@ public class GroupScapeTrackerPlugin extends Plugin {
     /** Rebuilds and pushes {@link SlayerTaskState}, handing in the last-pushed state so a
      * transient DB-row resolution miss (see {@link SlayerTaskState}'s two-arg-plus-previous
      * constructor javadoc) falls back to the previously known task name/location instead of
-     * clobbering it with null. */
+     * clobbering it with null. Also feeds the same previous/next pair to
+     * {@link #handleSlayerTaskTransition} for the History/Stats tabs' event stream. */
     private void pushSlayerTaskState(String playerName) {
         DataState slayerTask = dataManager.getSlayerTask();
         SlayerTaskState previous = (SlayerTaskState) slayerTask.mostRecentState();
-        slayerTask.update(new SlayerTaskState(playerName, client, currentSlayerTaskMaster, previous));
+        SlayerTaskState next = new SlayerTaskState(playerName, client, currentSlayerTaskMaster, previous);
+        slayerTask.update(next);
+        handleSlayerTaskTransition(playerName, previous, next);
+    }
+
+    /** Slayer task block price (reward points), by lowercase master name - flat 30 for a cancel
+     * regardless of master, this table is only consulted for the block case. Ported from the
+     * OSRS Wiki's "Block" article; Mortimer's Miscellania tasks aren't blockable so he's omitted
+     * (a Mortimer-task closing with neither a completed nor a -30 cancel delta falls through to
+     * "unknown" below, same as any other unrecognized delta). */
+    private static final Map<String, Integer> SLAYER_BLOCK_PRICE = Map.ofEntries(
+            Map.entry("turael", 40), Map.entry("aya", 40), Map.entry("spria", 40),
+            Map.entry("mazchna", 50), Map.entry("achtryn", 50),
+            Map.entry("vannaka", 60),
+            Map.entry("chaeldar", 70),
+            Map.entry("konar quo maten", 80),
+            Map.entry("nieve", 90), Map.entry("steve", 90),
+            Map.entry("duradel", 100), Map.entry("kuradal", 100),
+            Map.entry("krystilia", 100)
+    );
+    private static final int SLAYER_CANCEL_COST = 30;
+
+    /**
+     * Detects a slayer task starting or ending by comparing consecutive {@link SlayerTaskState}
+     * pushes, and feeds {@link SlayerTaskCloseEvents} for the site's slayer History/Stats tabs.
+     * Runs on every {@link #pushSlayerTaskState} call (i.e. every relevant varp/varbit change,
+     * including every kill's amount-remaining tick) but is a no-op unless {@code next}'s task
+     * identity actually differs from what's currently being tracked - see
+     * {@link #currentSlayerTaskEventId}'s javadoc for why that's tracked separately from
+     * {@code previous}/{@code next} rather than solely off {@code previous.taskId()}.
+     */
+    private void handleSlayerTaskTransition(String playerName, SlayerTaskState previous, SlayerTaskState next) {
+        boolean hasTaskNow = next.hasTask();
+
+        if (currentSlayerTaskEventId != null && (!hasTaskNow || next.taskId() != currentSlayerTaskId)) {
+            if (previous != null && previous.hasTask() && previous.taskId() == currentSlayerTaskId) {
+                closeSlayerTask(playerName, previous, next);
+            } else {
+                // `previous` no longer reflects the task we were tracking (shouldn't normally
+                // happen - see the javadoc above) - drop tracking rather than emit a close event
+                // built from the wrong task's numbers.
+                currentSlayerTaskEventId = null;
+                currentSlayerTaskAssignedAt = null;
+            }
+        }
+
+        if (hasTaskNow && currentSlayerTaskEventId == null && next.masterName() != null && next.taskName() != null) {
+            currentSlayerTaskId = next.taskId();
+            currentSlayerTaskEventId = SlayerTaskCloseEvents.newClientEventId();
+            currentSlayerTaskAssignedAt = Instant.now().toString();
+            dataManager.getSlayerTaskCloseEvents().onTaskAssigned(
+                    playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount());
+        }
+    }
+
+    /**
+     * Classifies how the task tracked as {@link #currentSlayerTaskEventId} just closed and emits
+     * its close event. {@code closingSnapshot} (last pushed state for that task) supplies the
+     * task/master name and final kill count; {@code afterClose} (the just-built current state,
+     * whatever it now represents - no task, or a freshly-assigned one) supplies the slayer points
+     * reading *after* whatever this closure cost/paid, so the delta against
+     * {@code closingSnapshot}'s points classifies completed (delta > 0, always true - even the
+     * smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked (delta
+     * matches that master's known block price) vs. unknown (anything else, e.g. a game update
+     * changing these prices, or a Mortimer task - see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
+     */
+    private void closeSlayerTask(String playerName, SlayerTaskState closingSnapshot, SlayerTaskState afterClose) {
+        currentSlayerTaskId = -1;
+        String eventId = currentSlayerTaskEventId;
+        String assignedAt = currentSlayerTaskAssignedAt;
+        currentSlayerTaskEventId = null;
+        currentSlayerTaskAssignedAt = null;
+        if (eventId == null || closingSnapshot.masterName() == null || closingSnapshot.taskName() == null) return;
+
+        int pointsDelta = afterClose.points() - closingSnapshot.points();
+        String status;
+        if (closingSnapshot.amountRemaining() <= 0) {
+            status = "completed";
+        } else if (pointsDelta == -SLAYER_CANCEL_COST) {
+            status = "cancelled";
+        } else {
+            Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingSnapshot.masterName().trim().toLowerCase());
+            status = (blockPrice != null && pointsDelta == -blockPrice) ? "blocked" : "unknown";
+        }
+
+        dataManager.getSlayerTaskCloseEvents().onTaskClosed(
+                playerName,
+                eventId,
+                closingSnapshot.taskName(),
+                closingSnapshot.masterName(),
+                status,
+                Math.max(0, closingSnapshot.initialAmount() - closingSnapshot.amountRemaining()),
+                closingSnapshot.initialAmount(),
+                pointsDelta != 0 ? pointsDelta : null,
+                assignedAt);
     }
 
     private static final int[] COMBAT_ACHIEVEMENT_TIER_VARBITS = {

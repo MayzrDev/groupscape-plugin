@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.19] - 2026-09-08
+
+### Added
+- Slayer tasks now build a history on the site (each task's master, points earned/spent, kills, and how it ended - completed, cancelled, or blocked) plus an all-time stats summary, both viewable from new tabs on the Slayer panel.
+
 ## [1.8.18] - 2026-09-07
 
 ### Added
