@@ -2,6 +2,7 @@ package com.groupscape.roster;
 
 import com.groupscape.GroupScapeTrackerConfig;
 import com.groupscape.NpcDialogueTracker;
+import com.groupscape.PrayerVisibility;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -14,7 +15,6 @@ import java.awt.geom.Arc2D;
 import java.awt.image.BufferedImage;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
@@ -164,21 +164,6 @@ public class PartyFrameOverlay extends Overlay {
             Prayer.RETRIBUTION, Prayer.REDEMPTION, Prayer.SMITE
     );
     private static final Color OVERHEAD_TINT = new Color(232, 197, 71, 130);
-
-    // Activating one of these "upgraded" curses also flags its lower-tier prayers as active in
-    // the client's prayer state (Deadeye lights up both Rigour and Eagle Eye too), so without
-    // this the row would show all of them at once even though only Deadeye is actually selected.
-    private static final Map<Prayer, Prayer> BASE_PRAYER_SUPPRESSED_BY_UPGRADE = new EnumMap<>(Prayer.class);
-    static {
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.RIGOUR, Prayer.DEADEYE);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.EAGLE_EYE, Prayer.DEADEYE);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.HAWK_EYE, Prayer.DEADEYE);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.SHARP_EYE, Prayer.DEADEYE);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.AUGURY, Prayer.MYSTIC_VIGOUR);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_MIGHT, Prayer.MYSTIC_VIGOUR);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_LORE, Prayer.MYSTIC_VIGOUR);
-        BASE_PRAYER_SUPPRESSED_BY_UPGRADE.put(Prayer.MYSTIC_WILL, Prayer.MYSTIC_VIGOUR);
-    }
 
     private static final Map<Prayer, Integer> PRAYER_SPRITE_IDS = buildPrayerSpriteIds();
 
@@ -1201,29 +1186,7 @@ public class PartyFrameOverlay extends Overlay {
      * missing field) so callers can use it directly to decide whether to reserve the icon row.
      */
     private static List<String> visibleActivePrayers(RosterMember member) {
-        List<String> raw = member.activePrayers;
-        if (raw == null || raw.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        Set<Prayer> active = EnumSet.noneOf(Prayer.class);
-        for (String name : raw) {
-            Prayer prayer = parsePrayer(name);
-            if (prayer != null) {
-                active.add(prayer);
-            }
-        }
-
-        List<String> visible = new ArrayList<>(raw.size());
-        for (String name : raw) {
-            Prayer prayer = parsePrayer(name);
-            Prayer upgrade = prayer != null ? BASE_PRAYER_SUPPRESSED_BY_UPGRADE.get(prayer) : null;
-            if (upgrade != null && active.contains(upgrade)) {
-                continue;
-            }
-            visible.add(name);
-        }
-        return visible;
+        return PrayerVisibility.visible(member.activePrayers);
     }
 
     /**

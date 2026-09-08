@@ -209,7 +209,9 @@ class MemberCardPanel extends JPanel {
         vitalsBarsPanel.setMember(member);
 
         boolean showPrayerIcons = !offline && !config.sidepanelHidePrayer() && !config.sidepanelHidePrayerIcons();
-        prayerIconsPanel.setActivePrayers(showPrayerIcons ? member.activePrayers : java.util.List.of());
+        prayerIconsPanel.setActivePrayers(showPrayerIcons
+                ? com.groupscape.PrayerVisibility.visible(member.activePrayers)
+                : java.util.List.of());
 
         if (snapshot != null) {
             inventoryPanel.setInventory(snapshot.inventory);
