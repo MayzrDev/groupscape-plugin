@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.21] - 2026-09-08
+
+### Fixed
+- Loot from bosses with long death animations (like Duke Sucellus) could fail to reach the site's loot log if the drop arrived a bit late - the plugin now waits a little longer before giving up on matching it to the kill.
+
 ## [1.8.20] - 2026-09-08
 
 ### Fixed

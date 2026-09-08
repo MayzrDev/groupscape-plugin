@@ -45,7 +45,7 @@ public class KillLootDeathEvents {
 
     /** How long a loot-less {@link PendingKill} is held back from the drain in {@link #consumeState}
      * to give a late-arriving same-name {@code LootReceived} a chance to attach (see class doc). */
-    private static final long LOOT_GRACE_MILLIS = 2000;
+    private static final long LOOT_GRACE_MILLIS = 3000;
 
     private final List<PendingKill> pendingKills = new ArrayList<>();
     private final List<Map<String, Object>> pendingDeaths = new ArrayList<>();
