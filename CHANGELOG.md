@@ -9,6 +9,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 
 ### Fixed
 - Active prayer icons no longer show both a base prayer and its upgraded curse at once (Eagle Eye/Rigour/Hawk Eye/Sharp Eye alongside Deadeye, or Mystic Might/Mystic Lore/Mystic Will alongside Mystic Vigour) in the in-game overlay, the client's own side panel, and the website's side panel.
+- Slayer task history and stats on the site were staying empty - the plugin was sending task events under the wrong upload key, so the server was silently dropping them.
 
 ## [1.8.18] - 2026-09-07
 

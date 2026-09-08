@@ -68,7 +68,7 @@ public class SlayerTaskCloseEvents {
 
         String whoIsUpdating = (String) output.get("name");
         if (owner != null && owner.equals(whoIsUpdating)) {
-            output.put("slayerTaskEvents", new ArrayList<>(pending));
+            output.put("slayer_task_events", new ArrayList<>(pending));
         }
 
         consumed = new ArrayList<>(pending);
