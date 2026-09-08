@@ -8,6 +8,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 - Active prayer icons were still doubling up (Eagle Eye/Rigour/Hawk Eye/Sharp Eye alongside Deadeye, or Mystic Might/Mystic Lore/Mystic Will alongside Mystic Vigour) in the in-game overlay and the client's own side panel, which had no filtering at all - all three surfaces (also the website's side panel) now share the same suppression logic.
 - Slayer task history and stats on the site were staying empty - the plugin was sending task events under the wrong upload key, so the server was silently dropping them.
 
+### Changed
+- Internal: commits now require a CHANGELOG.md entry - a pre-commit hook rejects a commit that doesn't stage one.
+
 ## [1.8.19] - 2026-09-08
 
 ### Added
