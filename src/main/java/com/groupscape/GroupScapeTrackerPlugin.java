@@ -682,6 +682,12 @@ public class GroupScapeTrackerPlugin extends Plugin {
     );
     private static final int SLAYER_CANCEL_COST = 30;
 
+    /** Masters who'll swap your current task for a new one at no points cost, at the price of
+     * resetting your normal-bucket streak to 0 - the "Turael skip". Only these three (Turael, and
+     * its While Guthix Sleeps/pre-quest reskins Aya/Spria - see {@code MASTER_GROUPS} in
+     * slayer-history-tab.js) offer it; Mazchna/Achtryn and everyone above them don't. */
+    private static final Set<String> SLAYER_RESET_MASTERS = Set.of("turael", "aya", "spria");
+
     /**
      * Detects a slayer task starting or ending by comparing consecutive {@link SlayerTaskState}
      * pushes, and feeds {@link SlayerTaskCloseEvents} for the site's slayer History/Stats tabs.
@@ -724,8 +730,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * reading *after* whatever this closure cost/paid, so the delta against
      * {@link #currentSlayerTaskPointsAtAssignment} classifies completed (delta > 0, always true -
      * even the smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked
-     * (delta matches that master's known block price) vs. unknown (anything else, e.g. a game
-     * update changing these prices, or a Mortimer task - see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
+     * (delta matches that master's known block price) vs. reset (delta == 0 and the closing
+     * master is one of {@link #SLAYER_RESET_MASTERS}, i.e. a free Turael/Aya/Spria skip) vs.
+     * unknown (anything else, e.g. a game update changing these prices, or a Mortimer task - see
+     * {@link #SLAYER_BLOCK_PRICE}'s javadoc).
      */
     private void closeSlayerTask(String playerName, SlayerTaskState closingSnapshot, SlayerTaskState afterClose) {
         currentSlayerTaskId = -1;
@@ -737,13 +745,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (eventId == null || closingSnapshot.masterName() == null || closingSnapshot.taskName() == null) return;
 
         int pointsDelta = afterClose.points() - pointsAtAssignment;
+        String masterKey = closingSnapshot.masterName().trim().toLowerCase();
         String status;
         if (closingSnapshot.amountRemaining() <= 0) {
             status = "completed";
         } else if (pointsDelta == -SLAYER_CANCEL_COST) {
             status = "cancelled";
+        } else if (pointsDelta == 0 && SLAYER_RESET_MASTERS.contains(masterKey)) {
+            status = "reset";
         } else {
-            Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingSnapshot.masterName().trim().toLowerCase());
+            Integer blockPrice = SLAYER_BLOCK_PRICE.get(masterKey);
             status = (blockPrice != null && pointsDelta == -blockPrice) ? "blocked" : "unknown";
         }
 
