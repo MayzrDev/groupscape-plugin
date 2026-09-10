@@ -10,6 +10,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - A completed slayer task's points reward wasn't showing up in the site's History tab - the plugin was comparing your points total from the wrong moment (after the reward had already landed), so it always looked like 0 gained.
 - A free task skip from Turael, Aya, or Spria was showing up as "Unknown" in the site's History tab. Now correctly shows as "Reset".
+- A finished slayer task could get stuck showing 0 kills and "In progress" in the site's History tab, even after it was turned in for a new task - the plugin could lose track of a task's final kill count right as it closed out.
 
 ## [1.8.21] - 2026-09-08
 

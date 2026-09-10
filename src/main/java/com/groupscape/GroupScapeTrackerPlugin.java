@@ -185,6 +185,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * - so by then a push has already carried the reward into every state up to and including
      * {@code closingSnapshot}, making that comparison read a false 0 delta. */
     private int currentSlayerTaskPointsAtAssignment;
+    /** Last confirmed {@link SlayerTaskState} for whichever task {@link #currentSlayerTaskEventId}
+     * is tracking, refreshed on every {@link #handleSlayerTaskTransition} call where the task
+     * identity hasn't changed. {@link #closeSlayerTask} reads from this instead of the `previous`
+     * argument (last state handed to that method call, sourced from {@code DataState}'s own
+     * bookkeeping) - the two are normally identical, but keeping a dedicated copy means a close
+     * event still carries the real final kill count even on a call where `previous` doesn't line
+     * up with {@link #currentSlayerTaskId} for some unrelated reason, rather than silently
+     * dropping tracking and losing the close event outright (see the History tab showing a task
+     * stuck "in progress" at 0 kills despite being finished in-game - a lost close event is the
+     * only way that row was ever written that way). */
+    private SlayerTaskState currentSlayerTaskLastSnapshot;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
@@ -655,14 +666,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
     /** Rebuilds and pushes {@link SlayerTaskState}, handing in the last-pushed state so a
      * transient DB-row resolution miss (see {@link SlayerTaskState}'s two-arg-plus-previous
      * constructor javadoc) falls back to the previously known task name/location instead of
-     * clobbering it with null. Also feeds the same previous/next pair to
-     * {@link #handleSlayerTaskTransition} for the History/Stats tabs' event stream. */
+     * clobbering it with null. Also feeds {@code next} to {@link #handleSlayerTaskTransition} for
+     * the History/Stats tabs' event stream. */
     private void pushSlayerTaskState(String playerName) {
         DataState slayerTask = dataManager.getSlayerTask();
         SlayerTaskState previous = (SlayerTaskState) slayerTask.mostRecentState();
         SlayerTaskState next = new SlayerTaskState(playerName, client, currentSlayerTaskMaster, previous);
         slayerTask.update(next);
-        handleSlayerTaskTransition(playerName, previous, next);
+        handleSlayerTaskTransition(playerName, next);
     }
 
     /** Slayer task block price (reward points), by lowercase master name - flat 30 for a cancel
@@ -695,21 +706,20 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * including every kill's amount-remaining tick) but is a no-op unless {@code next}'s task
      * identity actually differs from what's currently being tracked - see
      * {@link #currentSlayerTaskEventId}'s javadoc for why that's tracked separately from
-     * {@code previous}/{@code next} rather than solely off {@code previous.taskId()}.
+     * {@code previous}/{@code next} rather than solely off a prior push's task id. The close
+     * itself is built from {@link #currentSlayerTaskLastSnapshot}, not the last {@code DataState}
+     * push - see that field's javadoc.
      */
-    private void handleSlayerTaskTransition(String playerName, SlayerTaskState previous, SlayerTaskState next) {
+    private void handleSlayerTaskTransition(String playerName, SlayerTaskState next) {
         boolean hasTaskNow = next.hasTask();
 
         if (currentSlayerTaskEventId != null && (!hasTaskNow || next.taskId() != currentSlayerTaskId)) {
-            if (previous != null && previous.hasTask() && previous.taskId() == currentSlayerTaskId) {
-                closeSlayerTask(playerName, previous, next);
-            } else {
-                // `previous` no longer reflects the task we were tracking (shouldn't normally
-                // happen - see the javadoc above) - drop tracking rather than emit a close event
-                // built from the wrong task's numbers.
-                currentSlayerTaskEventId = null;
-                currentSlayerTaskAssignedAt = null;
+            if (currentSlayerTaskLastSnapshot != null) {
+                closeSlayerTask(playerName, currentSlayerTaskLastSnapshot, next);
             }
+            currentSlayerTaskEventId = null;
+            currentSlayerTaskAssignedAt = null;
+            currentSlayerTaskLastSnapshot = null;
         }
 
         if (hasTaskNow && currentSlayerTaskEventId == null && next.masterName() != null && next.taskName() != null) {
@@ -717,8 +727,11 @@ public class GroupScapeTrackerPlugin extends Plugin {
             currentSlayerTaskEventId = SlayerTaskCloseEvents.newClientEventId();
             currentSlayerTaskAssignedAt = Instant.now().toString();
             currentSlayerTaskPointsAtAssignment = next.points();
+            currentSlayerTaskLastSnapshot = next;
             dataManager.getSlayerTaskCloseEvents().onTaskAssigned(
                     playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount());
+        } else if (hasTaskNow && currentSlayerTaskEventId != null && next.taskId() == currentSlayerTaskId) {
+            currentSlayerTaskLastSnapshot = next;
         }
     }
 
