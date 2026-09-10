@@ -7,6 +7,9 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Changed
 - Internal: fixed a test that was checking the loot grace window against an outdated timing, so it no longer fails builds.
 
+### Fixed
+- A completed slayer task's points reward wasn't showing up in the site's History tab - the plugin was comparing your points total from the wrong moment (after the reward had already landed), so it always looked like 0 gained.
+
 ## [1.8.21] - 2026-09-08
 
 ### Fixed

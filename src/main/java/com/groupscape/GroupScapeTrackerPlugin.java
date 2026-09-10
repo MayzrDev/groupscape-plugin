@@ -178,6 +178,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
     private String currentSlayerTaskEventId;
     private int currentSlayerTaskId = -1;
     private String currentSlayerTaskAssignedAt;
+    /** {@code SLAYER_POINTS} as of this task's assignment - the baseline {@link #closeSlayerTask}
+     * diffs the final points reading against. Not {@code closingSnapshot.points()} (the last
+     * push before the transition), because a completed task's points land the moment the final
+     * kill lands - well before the master-dialogue transition that actually closes this task out
+     * - so by then a push has already carried the reward into every state up to and including
+     * {@code closingSnapshot}, making that comparison read a false 0 delta. */
+    private int currentSlayerTaskPointsAtAssignment;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
@@ -703,6 +710,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
             currentSlayerTaskId = next.taskId();
             currentSlayerTaskEventId = SlayerTaskCloseEvents.newClientEventId();
             currentSlayerTaskAssignedAt = Instant.now().toString();
+            currentSlayerTaskPointsAtAssignment = next.points();
             dataManager.getSlayerTaskCloseEvents().onTaskAssigned(
                     playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount());
         }
@@ -714,20 +722,21 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * task/master name and final kill count; {@code afterClose} (the just-built current state,
      * whatever it now represents - no task, or a freshly-assigned one) supplies the slayer points
      * reading *after* whatever this closure cost/paid, so the delta against
-     * {@code closingSnapshot}'s points classifies completed (delta > 0, always true - even the
-     * smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked (delta
-     * matches that master's known block price) vs. unknown (anything else, e.g. a game update
-     * changing these prices, or a Mortimer task - see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
+     * {@link #currentSlayerTaskPointsAtAssignment} classifies completed (delta > 0, always true -
+     * even the smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked
+     * (delta matches that master's known block price) vs. unknown (anything else, e.g. a game
+     * update changing these prices, or a Mortimer task - see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
      */
     private void closeSlayerTask(String playerName, SlayerTaskState closingSnapshot, SlayerTaskState afterClose) {
         currentSlayerTaskId = -1;
         String eventId = currentSlayerTaskEventId;
         String assignedAt = currentSlayerTaskAssignedAt;
+        int pointsAtAssignment = currentSlayerTaskPointsAtAssignment;
         currentSlayerTaskEventId = null;
         currentSlayerTaskAssignedAt = null;
         if (eventId == null || closingSnapshot.masterName() == null || closingSnapshot.taskName() == null) return;
 
-        int pointsDelta = afterClose.points() - closingSnapshot.points();
+        int pointsDelta = afterClose.points() - pointsAtAssignment;
         String status;
         if (closingSnapshot.amountRemaining() <= 0) {
             status = "completed";
