@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.22] - 2026-09-10
+
+### Changed
+- Internal: fixed a test that was checking the loot grace window against an outdated timing, so it no longer fails builds.
+
 ## [1.8.21] - 2026-09-08
 
 ### Fixed

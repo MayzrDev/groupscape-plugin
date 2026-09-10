@@ -75,7 +75,7 @@ public class KillLootDeathEventsTest {
         KillLootDeathEvents events = new KillLootDeathEvents();
         events.onKill("Zezima", 8288, "Vardorvis", 100, 200, 0, 301);
 
-        Thread.sleep(2100);
+        Thread.sleep(3100);
 
         Map<String, Object> output = new HashMap<>();
         output.put("name", "Zezima");
