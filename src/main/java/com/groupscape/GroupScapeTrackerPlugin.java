@@ -196,6 +196,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * stuck "in progress" at 0 kills despite being finished in-game - a lost close event is the
      * only way that row was ever written that way). */
     private SlayerTaskState currentSlayerTaskLastSnapshot;
+    /** Guards {@link #checkSlayerTaskUpdate}'s {@code clientThread.invokeLater} against queuing
+     * one redundant callback per underlying varp/varbit - a task assignment/turn-in flips several
+     * of {@link #SLAYER_TASK_VARPS}/{@link #SLAYER_TASK_VARBITS} in the same tick, and RuneLite
+     * fires a separate {@code VarbitChanged} for each, so without this a single transition was
+     * re-running the DB-table lookups in {@link SlayerTaskState} and a full panel re-render
+     * several times over - a noticeable hitch right at task start/finish. */
+    private boolean slayerTaskPushPending = false;
     private boolean cachePotions = false;
     private Set<Integer> potionStoreVars;
     private boolean lowHpAlertArmed = true;
@@ -620,8 +627,10 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * combat achievements/quests, see {@link #updateThingsThatDoNotChangeOften}) since a task
      * change is a meaningful, low-frequency event the sidepanel/website should reflect right away,
      * not up to a minute late. {@link DataState#update} already dedupes via
-     * {@link SlayerTaskState#equals}, so it's harmless to rebuild+push on every candidate
-     * varp/varbit change even though most of them won't actually differ from the last pushed state.
+     * {@link SlayerTaskState#equals}, so it would be harmless (just wasteful) to rebuild+push on
+     * every candidate varp/varbit change - {@link #slayerTaskPushPending} coalesces those into one
+     * rebuild+push per tick instead, since a single task assignment/turn-in changes several of
+     * them at once.
      */
     private void checkSlayerTaskUpdate(int varpId, int varbitId) {
         boolean isNewTask = varpId == VarPlayerID.SLAYER_TARGET || varpId == VarPlayerID.SLAYER_COUNT_ORIGINAL;
@@ -655,7 +664,17 @@ public class GroupScapeTrackerPlugin extends Plugin {
         // moment this VarbitChanged handler runs mid-tick, so resolving synchronously here can miss
         // it and (for a brand-new task, with no previous state to fall back on) permanently strand
         // taskName at null - i.e. the site showing "Unknown task" forever for that assignment.
+        //
+        // Coalesced via slayerTaskPushPending: a task assignment/turn-in changes several of
+        // SLAYER_TASK_VARPS/SLAYER_TASK_VARBITS at once, and RuneLite fires one VarbitChanged per
+        // underlying varp/varbit, so without this guard one transition queued several of these
+        // callbacks - each redoing SlayerTaskState's DB-table lookups and a full panel re-render.
+        if (slayerTaskPushPending) return;
+        slayerTaskPushPending = true;
+
         clientThread.invokeLater(() -> {
+            slayerTaskPushPending = false;
+
             Player local = client.getLocalPlayer();
             if (local == null || local.getName() == null) return;
 

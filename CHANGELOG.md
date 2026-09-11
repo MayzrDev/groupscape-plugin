@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.24] - 2026-09-11
+
+### Fixed
+- Fixed a brief stutter that happened every time a slayer task started or finished - the plugin was redundantly redoing its task lookup several times in the same instant instead of once.
+
 ## [1.8.23] - 2026-09-10
 
 ### Fixed
