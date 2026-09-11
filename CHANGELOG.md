@@ -2,6 +2,12 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.25] - 2026-09-11
+
+### Fixed
+- Skipping a task from a higher-level master (Vannaka, Nieve, Duradel, ...) via Turael/Aya/Spria was still showing up as "Superseded" in the site's History tab instead of "Reset" - the plugin was only checking who assigned the task being skipped, not who granted the free skip.
+- A task's close (finished, skipped, cancelled, or blocked) could get lost entirely if the client or plugin restarted at just the wrong moment, permanently stranding that row as "Superseded". The plugin now remembers an in-progress task across a restart so it can still close it out correctly.
+
 ## [1.8.24] - 2026-09-11
 
 ### Fixed

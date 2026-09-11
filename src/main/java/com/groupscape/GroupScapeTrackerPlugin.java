@@ -195,7 +195,41 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * dropping tracking and losing the close event outright (see the History tab showing a task
      * stuck "in progress" at 0 kills despite being finished in-game - a lost close event is the
      * only way that row was ever written that way). */
-    private SlayerTaskState currentSlayerTaskLastSnapshot;
+    private ClosingTaskSnapshot currentSlayerTaskLastSnapshot;
+    /** Guards {@link #restorePendingSlayerTaskCloseIfNeeded} to run at most once per plugin
+     * session - it only has anything to do the first time a slayer-task push happens after
+     * startup, since after that {@link #currentSlayerTaskEventId} is the source of truth again. */
+    private boolean slayerTaskRestoreAttempted = false;
+    private static final String SLAYER_TRACKER_CONFIG_GROUP = "GroupScapeTracker";
+    /** Config key {@link #persistPendingSlayerTaskClose}/{@link #restorePendingSlayerTaskCloseIfNeeded}
+     * use to survive a plugin/client restart mid-task - without this, a restart between a task
+     * finishing (or being skipped/cancelled/blocked) and the plugin's own in-memory tracking
+     * ({@link #currentSlayerTaskEventId} et al, reset to null on every plugin load) sending its
+     * close event would strand that row open forever, later force-closed server-side as a generic
+     * "superseded" guess instead of the real completed/reset/cancelled/blocked outcome. */
+    private static final String SLAYER_PENDING_CLOSE_CONFIG_KEY = "pendingSlayerTaskClose";
+
+    /** Minimal stand-in for {@link SlayerTaskState} carrying only what {@link #closeSlayerTask}
+     * needs from the task being closed - decoupled from the full varp/varbit-reading class so a
+     * snapshot restored from {@link #SLAYER_PENDING_CLOSE_CONFIG_KEY} (plain data, no {@link
+     * net.runelite.api.Client} to read from) can stand in for a live one interchangeably. */
+    private static final class ClosingTaskSnapshot {
+        final String masterName;
+        final String taskName;
+        final int amountRemaining;
+        final int initialAmount;
+
+        ClosingTaskSnapshot(String masterName, String taskName, int amountRemaining, int initialAmount) {
+            this.masterName = masterName;
+            this.taskName = taskName;
+            this.amountRemaining = amountRemaining;
+            this.initialAmount = initialAmount;
+        }
+
+        static ClosingTaskSnapshot from(SlayerTaskState state) {
+            return new ClosingTaskSnapshot(state.masterName(), state.taskName(), state.amountRemaining(), state.initialAmount());
+        }
+    }
     /** Guards {@link #checkSlayerTaskUpdate}'s {@code clientThread.invokeLater} against queuing
      * one redundant callback per underlying varp/varbit - a task assignment/turn-in flips several
      * of {@link #SLAYER_TASK_VARPS}/{@link #SLAYER_TASK_VARBITS} in the same tick, and RuneLite
@@ -688,11 +722,69 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * clobbering it with null. Also feeds {@code next} to {@link #handleSlayerTaskTransition} for
      * the History/Stats tabs' event stream. */
     private void pushSlayerTaskState(String playerName) {
+        restorePendingSlayerTaskCloseIfNeeded(playerName);
+
         DataState slayerTask = dataManager.getSlayerTask();
         SlayerTaskState previous = (SlayerTaskState) slayerTask.mostRecentState();
         SlayerTaskState next = new SlayerTaskState(playerName, client, currentSlayerTaskMaster, previous);
         slayerTask.update(next);
         handleSlayerTaskTransition(playerName, next);
+    }
+
+    /**
+     * Restores {@link #currentSlayerTaskEventId} et al from {@link #SLAYER_PENDING_CLOSE_CONFIG_KEY}
+     * the first time a slayer-task push happens after plugin startup - see that field's javadoc for
+     * why this exists. Runs before {@link #handleSlayerTaskTransition} so a task that already
+     * finished/turned over while the plugin was down gets closed out correctly (by comparing the
+     * restored snapshot against whatever the live varps now show) instead of leaking a permanently
+     * open row. Consumes the stored value either way (restore is at most once per session).
+     */
+    private void restorePendingSlayerTaskCloseIfNeeded(String playerName) {
+        if (slayerTaskRestoreAttempted) return;
+        slayerTaskRestoreAttempted = true;
+
+        String raw = configManager.getConfiguration(SLAYER_TRACKER_CONFIG_GROUP, SLAYER_PENDING_CLOSE_CONFIG_KEY);
+        if (raw == null) return;
+        configManager.unsetConfiguration(SLAYER_TRACKER_CONFIG_GROUP, SLAYER_PENDING_CLOSE_CONFIG_KEY);
+
+        try {
+            Map<?, ?> blob = gson.fromJson(raw, Map.class);
+            if (blob == null || !playerName.equals(blob.get("playerName"))) return;
+
+            currentSlayerTaskEventId = (String) blob.get("eventId");
+            currentSlayerTaskAssignedAt = (String) blob.get("assignedAt");
+            currentSlayerTaskPointsAtAssignment = ((Number) blob.get("pointsAtAssignment")).intValue();
+            currentSlayerTaskId = ((Number) blob.get("taskId")).intValue();
+            currentSlayerTaskLastSnapshot = new ClosingTaskSnapshot(
+                    (String) blob.get("masterName"),
+                    (String) blob.get("taskName"),
+                    ((Number) blob.get("amountRemaining")).intValue(),
+                    ((Number) blob.get("initialAmount")).intValue());
+        } catch (RuntimeException e) {
+            log.warn("Failed to restore pending slayer task close state", e);
+        }
+    }
+
+    /** Mirrors the in-memory {@link #currentSlayerTaskEventId} tracking state to {@link
+     * #SLAYER_PENDING_CLOSE_CONFIG_KEY} after every {@link #handleSlayerTaskTransition} call, so a
+     * plugin/client restart has something to pick back up - see {@link #restorePendingSlayerTaskCloseIfNeeded}. */
+    private void persistPendingSlayerTaskClose(String playerName) {
+        if (currentSlayerTaskEventId == null || currentSlayerTaskLastSnapshot == null) {
+            configManager.unsetConfiguration(SLAYER_TRACKER_CONFIG_GROUP, SLAYER_PENDING_CLOSE_CONFIG_KEY);
+            return;
+        }
+
+        Map<String, Object> blob = new HashMap<>();
+        blob.put("playerName", playerName);
+        blob.put("eventId", currentSlayerTaskEventId);
+        blob.put("assignedAt", currentSlayerTaskAssignedAt);
+        blob.put("pointsAtAssignment", currentSlayerTaskPointsAtAssignment);
+        blob.put("taskId", currentSlayerTaskId);
+        blob.put("masterName", currentSlayerTaskLastSnapshot.masterName);
+        blob.put("taskName", currentSlayerTaskLastSnapshot.taskName);
+        blob.put("amountRemaining", currentSlayerTaskLastSnapshot.amountRemaining);
+        blob.put("initialAmount", currentSlayerTaskLastSnapshot.initialAmount);
+        configManager.setConfiguration(SLAYER_TRACKER_CONFIG_GROUP, SLAYER_PENDING_CLOSE_CONFIG_KEY, gson.toJson(blob));
     }
 
     /** Slayer task block price (reward points), by lowercase master name - flat 30 for a cancel
@@ -746,12 +838,14 @@ public class GroupScapeTrackerPlugin extends Plugin {
             currentSlayerTaskEventId = SlayerTaskCloseEvents.newClientEventId();
             currentSlayerTaskAssignedAt = Instant.now().toString();
             currentSlayerTaskPointsAtAssignment = next.points();
-            currentSlayerTaskLastSnapshot = next;
+            currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
             dataManager.getSlayerTaskCloseEvents().onTaskAssigned(
                     playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount());
         } else if (hasTaskNow && currentSlayerTaskEventId != null && next.taskId() == currentSlayerTaskId) {
-            currentSlayerTaskLastSnapshot = next;
+            currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
         }
+
+        persistPendingSlayerTaskClose(playerName);
     }
 
     /**
@@ -762,42 +856,49 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * reading *after* whatever this closure cost/paid, so the delta against
      * {@link #currentSlayerTaskPointsAtAssignment} classifies completed (delta > 0, always true -
      * even the smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked
-     * (delta matches that master's known block price) vs. reset (delta == 0 and the closing
-     * master is one of {@link #SLAYER_RESET_MASTERS}, i.e. a free Turael/Aya/Spria skip) vs.
-     * unknown (anything else, e.g. a game update changing these prices, or a Mortimer task - see
-     * {@link #SLAYER_BLOCK_PRICE}'s javadoc).
+     * (delta matches that master's known block price) vs. reset (delta == 0 and either the
+     * closing task's own master, or whichever master {@code afterClose} shows a new task from, is
+     * one of {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to
+     * one of those three, not by the task *being closed* having come from one of them; checking
+     * only the closing master missed the common case of skipping a higher-level master's task)
+     * vs. unknown (anything else, e.g. a game update changing these prices, or a Mortimer task -
+     * see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
      */
-    private void closeSlayerTask(String playerName, SlayerTaskState closingSnapshot, SlayerTaskState afterClose) {
+    private void closeSlayerTask(String playerName, ClosingTaskSnapshot closingSnapshot, SlayerTaskState afterClose) {
         currentSlayerTaskId = -1;
         String eventId = currentSlayerTaskEventId;
         String assignedAt = currentSlayerTaskAssignedAt;
         int pointsAtAssignment = currentSlayerTaskPointsAtAssignment;
         currentSlayerTaskEventId = null;
         currentSlayerTaskAssignedAt = null;
-        if (eventId == null || closingSnapshot.masterName() == null || closingSnapshot.taskName() == null) return;
+        if (eventId == null || closingSnapshot.masterName == null || closingSnapshot.taskName == null) return;
 
         int pointsDelta = afterClose.points() - pointsAtAssignment;
-        String masterKey = closingSnapshot.masterName().trim().toLowerCase();
+        String closingMasterKey = closingSnapshot.masterName.trim().toLowerCase();
+        String incomingMasterKey = afterClose.hasTask() && afterClose.masterName() != null
+                ? afterClose.masterName().trim().toLowerCase()
+                : null;
         String status;
-        if (closingSnapshot.amountRemaining() <= 0) {
+        if (closingSnapshot.amountRemaining <= 0) {
             status = "completed";
         } else if (pointsDelta == -SLAYER_CANCEL_COST) {
             status = "cancelled";
-        } else if (pointsDelta == 0 && SLAYER_RESET_MASTERS.contains(masterKey)) {
+        } else if (pointsDelta == 0 && (SLAYER_RESET_MASTERS.contains(closingMasterKey)
+                || (incomingMasterKey != null && SLAYER_RESET_MASTERS.contains(incomingMasterKey)))) {
             status = "reset";
         } else {
-            Integer blockPrice = SLAYER_BLOCK_PRICE.get(masterKey);
+            Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
             status = (blockPrice != null && pointsDelta == -blockPrice) ? "blocked" : "unknown";
         }
 
         dataManager.getSlayerTaskCloseEvents().onTaskClosed(
                 playerName,
                 eventId,
-                closingSnapshot.taskName(),
-                closingSnapshot.masterName(),
+                closingSnapshot.taskName,
+                closingSnapshot.masterName,
                 status,
-                Math.max(0, closingSnapshot.initialAmount() - closingSnapshot.amountRemaining()),
-                closingSnapshot.initialAmount(),
+                Math.max(0, closingSnapshot.initialAmount - closingSnapshot.amountRemaining),
+                closingSnapshot.initialAmount,
                 pointsDelta != 0 ? pointsDelta : null,
                 assignedAt);
     }
