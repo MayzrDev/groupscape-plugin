@@ -169,6 +169,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * {@link #checkSlayerTaskUpdate}. Persists across ticks until the next task change - there is
      * no varp/varbit that names the assigning master directly. */
     private String currentSlayerTaskMaster;
+    /** Whichever slayer master's Rewards shop is currently open, snapshotted from
+     * {@link #lastDialogNpcName} the moment the shop widget appears - see
+     * {@link #captureSlayerRewardShopMaster}. The shop interface isn't itself a dialogue box, so
+     * {@link #lastDialogNpcName} stops updating once it's open; this is the only way to attribute
+     * a Reward Shop purchase made inside it (e.g. blocking a task type) to the right master, since
+     * that master isn't necessarily whoever assigned the player's current task. */
+    private String currentRewardShopMaster;
     /** Identity of the task currently being tracked for {@link SlayerTaskCloseEvents} (History/
      * Stats tabs) - `null` when no task is being tracked, i.e. either there's no active task or
      * the active one's master/task name hasn't resolved yet (see {@link #handleSlayerTaskTransition}).
@@ -789,9 +796,7 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /** Slayer task block price (reward points), by lowercase master name - flat 30 for a cancel
      * regardless of master, this table is only consulted for the block case. Ported from the
-     * OSRS Wiki's "Block" article; Mortimer's Miscellania tasks aren't blockable so he's omitted
-     * (a Mortimer-task closing with neither a completed nor a -30 cancel delta falls through to
-     * "unknown" below, same as any other unrecognized delta). */
+     * OSRS Wiki's "Slayer Masters" article. */
     private static final Map<String, Integer> SLAYER_BLOCK_PRICE = Map.ofEntries(
             Map.entry("turael", 40), Map.entry("aya", 40), Map.entry("spria", 40),
             Map.entry("mazchna", 50), Map.entry("achtryn", 50),
@@ -800,7 +805,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
             Map.entry("konar quo maten", 80),
             Map.entry("nieve", 90), Map.entry("steve", 90),
             Map.entry("duradel", 100), Map.entry("kuradal", 100),
-            Map.entry("krystilia", 100)
+            Map.entry("krystilia", 100),
+            Map.entry("mortimer", 120)
     );
     private static final int SLAYER_CANCEL_COST = 30;
 
@@ -855,15 +861,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * task/master name and final kill count; {@code afterClose} (the just-built current state,
      * whatever it now represents - no task, or a freshly-assigned one) supplies the slayer points
      * reading *after* whatever this closure cost/paid, so the delta against
-     * {@link #currentSlayerTaskPointsAtAssignment} classifies completed (delta > 0, always true -
-     * even the smallest per-task reward is a few points) vs. cancelled (delta == -30) vs. blocked
+     * {@link #currentSlayerTaskPointsAtAssignment} classifies cancelled (delta == -30) vs. blocked
      * (delta matches that master's known block price) vs. reset (delta == 0 and either the
      * closing task's own master, or whichever master {@code afterClose} shows a new task from, is
      * one of {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to
      * one of those three, not by the task *being closed* having come from one of them; checking
      * only the closing master missed the common case of skipping a higher-level master's task)
-     * vs. unknown (anything else, e.g. a game update changing these prices, or a Mortimer task -
-     * see {@link #SLAYER_BLOCK_PRICE}'s javadoc).
+     * vs. completed (the kill count reached 0 remaining and none of the above matched - a player
+     * can still block/cancel a task after fully killing it but before turning it in, so those
+     * price checks must run first or the block/cancel cost gets mislabeled as this task's own
+     * reward) vs. unknown (anything else, e.g. a game update changing these prices).
      */
     private void closeSlayerTask(String playerName, ClosingTaskSnapshot closingSnapshot, SlayerTaskState afterClose) {
         currentSlayerTaskId = -1;
@@ -879,17 +886,19 @@ public class GroupScapeTrackerPlugin extends Plugin {
         String incomingMasterKey = afterClose.hasTask() && afterClose.masterName() != null
                 ? afterClose.masterName().trim().toLowerCase()
                 : null;
+        Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
         String status;
-        if (closingSnapshot.amountRemaining <= 0) {
-            status = "completed";
-        } else if (pointsDelta == -SLAYER_CANCEL_COST) {
+        if (pointsDelta == -SLAYER_CANCEL_COST) {
             status = "cancelled";
+        } else if (blockPrice != null && pointsDelta == -blockPrice) {
+            status = "blocked";
         } else if (pointsDelta == 0 && (SLAYER_RESET_MASTERS.contains(closingMasterKey)
                 || (incomingMasterKey != null && SLAYER_RESET_MASTERS.contains(incomingMasterKey)))) {
             status = "reset";
+        } else if (closingSnapshot.amountRemaining <= 0) {
+            status = "completed";
         } else {
-            Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
-            status = (blockPrice != null && pointsDelta == -blockPrice) ? "blocked" : "unknown";
+            status = "unknown";
         }
 
         dataManager.getSlayerTaskCloseEvents().onTaskClosed(
@@ -1072,6 +1081,9 @@ public class GroupScapeTrackerPlugin extends Plugin {
         if (menuAction == MenuAction.CC_OP) {
             if (param1 == DEPOSIT_ITEM || param1 == DEPOSIT_INVENTORY || param1 == DEPOSIT_EQUIPMENT) {
                 itemsMayHaveBeenDeposited();
+            } else if (event.getWidget() != null
+                    && event.getWidget().getId() == InterfaceID.SlayerRewards.CONFIRM_BUTTON) {
+                handleSlayerRewardShopConfirm();
             }
         } else if (isGameObjectAction(menuAction)) {
             recordObjectInteraction(event);
@@ -1908,6 +1920,72 @@ public class GroupScapeTrackerPlugin extends Plugin {
         }
 
         updateNpcDialogueEvent(player);
+        captureSlayerRewardShopMaster();
+    }
+
+    /**
+     * Tracks which master's Slayer Rewards shop is currently open, so
+     * {@link #handleSlayerRewardShopConfirm} can attribute a block purchase made inside it to the
+     * right master - see {@link #currentRewardShopMaster}'s javadoc for why this can't just reuse
+     * {@link #currentSlayerTaskMaster} (the shop can be opened for any unlocked master, not only
+     * whoever assigned the player's current task).
+     */
+    private void captureSlayerRewardShopMaster() {
+        Widget main = client.getWidget(InterfaceID.SlayerRewards.MAIN);
+        if (main == null || main.isHidden()) {
+            currentRewardShopMaster = null;
+            return;
+        }
+        if (currentRewardShopMaster == null && lastDialogNpcName != null
+                && SLAYER_MASTER_NAMES.contains(lastDialogNpcName.toLowerCase())) {
+            currentRewardShopMaster = lastDialogNpcName;
+        }
+    }
+
+    /** Matches the Slayer Rewards shop's block-confirmation popup text (captured from
+     * {@link net.runelite.api.gameval.InterfaceID.SlayerRewards#CONFIRM_TEXT}) to pull out which
+     * task type is being blocked. Wording ported from observed client text; verify against a live
+     * client if the OSRS client text ever changes and this stops matching (falls through to a
+     * no-op, not a crash, if it doesn't match). */
+    private static final Pattern SLAYER_REWARD_SHOP_BLOCK_PATTERN = Pattern.compile(
+            "block\\s+(.+?)\\s+as\\s+a?\\s*(?:possible\\s+)?task", Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Fires when the player confirms a purchase in the Slayer Rewards shop's confirmation popup.
+     * Only "block a task type" purchases are of interest here (see
+     * {@link #SLAYER_REWARD_SHOP_BLOCK_PATTERN}) - unlocking or extending a task type costs points
+     * too, but doesn't produce a bogus/misattributed row the way blocking does (see
+     * {@link #closeSlayerTask}'s javadoc), so those are left alone. This purchase has no task
+     * assignment lifecycle of its own - it's independent of whatever task the player currently has
+     * active - so it's emitted as a standalone, already-closed history event rather than going
+     * through {@link #handleSlayerTaskTransition}/{@link #closeSlayerTask}.
+     */
+    private void handleSlayerRewardShopConfirm() {
+        Widget confirmText = client.getWidget(InterfaceID.SlayerRewards.CONFIRM_TEXT);
+        if (confirmText == null || confirmText.getText() == null) return;
+
+        Matcher matcher = SLAYER_REWARD_SHOP_BLOCK_PATTERN.matcher(Text.removeTags(confirmText.getText()));
+        if (!matcher.find()) return;
+        String taskName = matcher.group(1).trim();
+        if (taskName.isEmpty() || currentRewardShopMaster == null) return;
+
+        Integer blockPrice = SLAYER_BLOCK_PRICE.get(currentRewardShopMaster.trim().toLowerCase());
+        if (blockPrice == null) return;
+
+        Player local = client.getLocalPlayer();
+        if (local == null || local.getName() == null) return;
+
+        String now = Instant.now().toString();
+        dataManager.getSlayerTaskCloseEvents().onTaskClosed(
+                local.getName(),
+                SlayerTaskCloseEvents.newClientEventId(),
+                taskName,
+                currentRewardShopMaster,
+                "blocked",
+                0,
+                0,
+                -blockPrice,
+                now);
     }
 
     /**
