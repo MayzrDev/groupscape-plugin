@@ -861,16 +861,25 @@ public class GroupScapeTrackerPlugin extends Plugin {
      * task/master name and final kill count; {@code afterClose} (the just-built current state,
      * whatever it now represents - no task, or a freshly-assigned one) supplies the slayer points
      * reading *after* whatever this closure cost/paid, so the delta against
-     * {@link #currentSlayerTaskPointsAtAssignment} classifies cancelled (delta == -30) vs. blocked
-     * (delta matches that master's known block price) vs. reset (delta == 0 and either the
-     * closing task's own master, or whichever master {@code afterClose} shows a new task from, is
-     * one of {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to
-     * one of those three, not by the task *being closed* having come from one of them; checking
-     * only the closing master missed the common case of skipping a higher-level master's task)
-     * vs. completed (the kill count reached 0 remaining and none of the above matched - a player
-     * can still block/cancel a task after fully killing it but before turning it in, so those
-     * price checks must run first or the block/cancel cost gets mislabeled as this task's own
-     * reward) vs. unknown (anything else, e.g. a game update changing these prices).
+     * {@link #currentSlayerTaskPointsAtAssignment} classifies the close. Completed (the kill count
+     * already reached 0 remaining) is checked *first* and wins outright: a kill-count task
+     * auto-completes the instant its counter hits 0, with no window to block/cancel it afterwards,
+     * so any points movement measured across a completed task's lifetime is necessarily an
+     * unrelated reward-shop purchase (most commonly blocking a *different*, still-current task's
+     * type became today's task - see below) rather than this task's own outcome; misreading that
+     * as this task being blocked/cancelled was exactly the bug that mislabeled a fully-killed
+     * Turoth task as "blocked -120" when the points actually came from blocking an unrelated task.
+     * Otherwise: cancelled (delta == -30) vs. blocked (delta matches that master's known block
+     * price - only reachable here because the task did NOT complete, so the points loss really is
+     * this task's own block) vs. reset (delta == 0 and either the closing task's own master, or
+     * whichever master {@code afterClose} shows a new task from, is one of
+     * {@link #SLAYER_RESET_MASTERS} - a free Turael/Aya/Spria skip is granted by talking to one of
+     * those three, not by the task *being closed* having come from one of them; checking only the
+     * closing master missed the common case of skipping a higher-level master's task) vs. unknown
+     * (anything else, e.g. a game update changing these prices). A block purchase made via the
+     * Slayer Rewards shop is also independently logged as its own standalone row by
+     * {@link #handleSlayerRewardShopConfirm} - that's the authoritative record of the points spend
+     * itself; this method only classifies what happened to the *currently tracked* task.
      */
     private void closeSlayerTask(String playerName, ClosingTaskSnapshot closingSnapshot, SlayerTaskState afterClose) {
         currentSlayerTaskId = -1;
@@ -888,15 +897,16 @@ public class GroupScapeTrackerPlugin extends Plugin {
                 : null;
         Integer blockPrice = SLAYER_BLOCK_PRICE.get(closingMasterKey);
         String status;
-        if (pointsDelta == -SLAYER_CANCEL_COST) {
+        if (closingSnapshot.amountRemaining <= 0) {
+            status = "completed";
+            pointsDelta = 0;
+        } else if (pointsDelta == -SLAYER_CANCEL_COST) {
             status = "cancelled";
         } else if (blockPrice != null && pointsDelta == -blockPrice) {
             status = "blocked";
         } else if (pointsDelta == 0 && (SLAYER_RESET_MASTERS.contains(closingMasterKey)
                 || (incomingMasterKey != null && SLAYER_RESET_MASTERS.contains(incomingMasterKey)))) {
             status = "reset";
-        } else if (closingSnapshot.amountRemaining <= 0) {
-            status = "completed";
         } else {
             status = "unknown";
         }
@@ -1944,11 +1954,13 @@ public class GroupScapeTrackerPlugin extends Plugin {
 
     /** Matches the Slayer Rewards shop's block-confirmation popup text (captured from
      * {@link net.runelite.api.gameval.InterfaceID.SlayerRewards#CONFIRM_TEXT}) to pull out which
-     * task type is being blocked. Wording ported from observed client text; verify against a live
-     * client if the OSRS client text ever changes and this stops matching (falls through to a
-     * no-op, not a crash, if it doesn't match). */
+     * task type is being blocked. Wording ported from observed client text ("...block X as a
+     * possible slayer task?") - the in-game text has "slayer" between "possible" and "task", so
+     * both must be optional independently rather than only "possible" being optional in front of a
+     * literal "task"; verify against a live client if the OSRS client text ever changes and this
+     * stops matching (falls through to a no-op, not a crash, if it doesn't match). */
     private static final Pattern SLAYER_REWARD_SHOP_BLOCK_PATTERN = Pattern.compile(
-            "block\\s+(.+?)\\s+as\\s+a?\\s*(?:possible\\s+)?task", Pattern.CASE_INSENSITIVE);
+            "block\\s+(.+?)\\s+as\\s+a?\\s*(?:possible\\s+)?(?:slayer\\s+)?task", Pattern.CASE_INSENSITIVE);
 
     /**
      * Fires when the player confirms a purchase in the Slayer Rewards shop's confirmation popup.
