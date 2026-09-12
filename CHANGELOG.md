@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.28] - 2026-09-13
+
+### Fixed
+- The Mortimer task-modifier badge (bonus points, task size up/down, clue rate, superior unique rate, XP) could stay showing on your next task after finishing a Mortimer assignment, even when reassigned by a completely different slayer master. It's now only ever shown for a task actually assigned by Mortimer.
+
 ## [1.8.27] - 2026-09-12
 
 ### Fixed
