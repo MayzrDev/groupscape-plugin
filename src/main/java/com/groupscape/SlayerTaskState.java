@@ -87,22 +87,14 @@ public class SlayerTaskState implements ConsumableState {
         }
         this.initialAmount = initialAmount;
 
+        this.modifierType = resolveModifierType(rawModifierId);
+        this.modifierValue = modifierType != null ? rawModifierValue : null;
+        this.modifierNegative = modifierType != null ? rawModifierNegative : null;
+
         // Krystilia (wilderness) and Mortimer (Managing Miscellania hard diary reward) keep their
         // own separate "tasks completed" counters instead of feeding the regular one - ported
         // 1:1 from RuneLite core's SlayerPlugin streak logic.
         int master = client.getVarbitValue(VarbitID.SLAYER_MASTER);
-
-        // The SLAYER_MODIFIER_* varbits are only ever meaningful for a Mortimer assignment (they
-        // back his reward-shop-driven task text, script9747) but the game doesn't reliably reset
-        // them to "no modifier" once you leave Mortimer - they've been observed still holding his
-        // last task's values on a task from a completely different master. Gate on master == 10
-        // (Mortimer, see resolveMasterNameFromOrdinal) rather than trusting rawModifierId alone, so
-        // a stale modifier never leaks onto a non-Mortimer task.
-        boolean isMortimer = master == 10;
-        this.modifierType = isMortimer ? resolveModifierType(rawModifierId) : null;
-        this.modifierValue = modifierType != null ? rawModifierValue : null;
-        this.modifierNegative = modifierType != null ? rawModifierNegative : null;
-
         switch (master) {
             case 7:
                 this.streak = client.getVarbitValue(VarbitID.SLAYER_WILDERNESS_TASKS_COMPLETED);
