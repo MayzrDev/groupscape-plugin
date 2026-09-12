@@ -37,7 +37,7 @@ public class NotableDropEvents {
 
         String whoIsUpdating = (String) output.get("name");
         if (owner != null && owner.equals(whoIsUpdating)) {
-            output.put("notableDrops", new ArrayList<>(pending));
+            output.put("notable_drops", new ArrayList<>(pending));
         }
 
         consumed = new ArrayList<>(pending);

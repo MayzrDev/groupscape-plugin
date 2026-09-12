@@ -7,6 +7,7 @@ All notable changes to the GroupScape plugin are logged here, newest first.
 ### Fixed
 - Blocking or cancelling a task right after finishing its kill count, but before turning it in, was showing up as a normal "Completed" task in the site's History tab, with the block/cancel fee looking like that task's own reward. It's now correctly labeled Blocked/Cancelled.
 - Blocking a task type from the Slayer Reward Shop's list wasn't tracked at all - its point cost could silently attach to whatever task happened to close next in the site's History tab. It now shows up as its own entry.
+- Notable drop chat notifications weren't reaching anyone - a mismatched field name meant the drop info never made it to the site, so the "player got X" chat message never fired for you or your group.
 
 ## [1.8.26] - 2026-09-12
 
