@@ -840,7 +840,8 @@ public class GroupScapeTrackerPlugin extends Plugin {
             currentSlayerTaskPointsAtAssignment = next.points();
             currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
             dataManager.getSlayerTaskCloseEvents().onTaskAssigned(
-                    playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount());
+                    playerName, currentSlayerTaskEventId, next.taskName(), next.masterName(), next.initialAmount(),
+                    next.modifierType(), next.modifierValue(), next.modifierNegative());
         } else if (hasTaskNow && currentSlayerTaskEventId != null && next.taskId() == currentSlayerTaskId) {
             currentSlayerTaskLastSnapshot = ClosingTaskSnapshot.from(next);
         }

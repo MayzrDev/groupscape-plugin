@@ -2,6 +2,11 @@
 
 All notable changes to the GroupScape plugin are logged here, newest first.
 
+## [1.8.26] - 2026-09-12
+
+### Added
+- Mortimer's task modifiers (bonus points, task size up/down, clue rate, superior unique rate, Slayer XP) are now sent to the site's current task panel and History tab.
+
 ## [1.8.25] - 2026-09-11
 
 ### Fixed

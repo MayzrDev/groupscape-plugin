@@ -26,7 +26,8 @@ public class SlayerTaskCloseEvents {
     private String consumedOwner;
 
     public synchronized String onTaskAssigned(String playerName, String clientEventId, String taskName,
-                                               String masterName, int amountTotal) {
+                                               String masterName, int amountTotal, String modifierType,
+                                               Integer modifierValue, Boolean modifierNegative) {
         owner = playerName;
         Map<String, Object> event = new HashMap<>();
         event.put("clientEventId", clientEventId);
@@ -36,6 +37,14 @@ public class SlayerTaskCloseEvents {
         event.put("amountDone", 0);
         event.put("amountTotal", amountTotal);
         event.put("assignedAt", Instant.now().toString());
+        // Fixed for the task's whole lifecycle - not re-sent by onTaskClosed, so the history row
+        // keeps whatever this assignment set even though the close event's upsert doesn't touch
+        // these columns (see db::upsert_slayer_task_history_event).
+        if (modifierType != null) {
+            event.put("modifierType", modifierType);
+            event.put("modifierValue", modifierValue);
+            event.put("modifierNegative", modifierNegative);
+        }
         pending.add(event);
         return clientEventId;
     }

@@ -39,6 +39,17 @@ public class SlayerTaskState implements ConsumableState {
     private final int points;
     private final int streak;
 
+    /**
+     * Mortimer's task modifier, resolved from the raw {@code SLAYER_MODIFIER_ID}/{@code
+     * SLAYER_MODIFIER_VALUE}/{@code SLAYER_MODIFIER_NEGATIVE} varbits - {@code null} when no
+     * modifier is active. Ids confirmed against the game's own decompiled interface script
+     * (`slayer_modifiername_rewardshop`/script9747, which renders this same id/value pair into
+     * Mortimer's assignment text) - see {@link #resolveModifierType}.
+     */
+    private final String modifierType;
+    private final Integer modifierValue;
+    private final Boolean modifierNegative;
+
     private final int taskId;
 
     public SlayerTaskState(String playerName, Client client, String masterName) {
@@ -68,12 +79,17 @@ public class SlayerTaskState implements ConsumableState {
         // pre-modifier base amount, but SLAYER_COUNT (remaining) already accounts for the modifier,
         // so only the initial/total needs adjusting here. Ported from RuneLite core's SlayerPlugin.
         int initialAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
-        if (client.getVarbitValue(VarbitID.SLAYER_MODIFIER_ID) == 2) {
-            boolean isNegative = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_NEGATIVE) == 1;
-            int modifierValue = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_VALUE);
-            initialAmount += isNegative ? -modifierValue : modifierValue;
+        int rawModifierId = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_ID);
+        boolean rawModifierNegative = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_NEGATIVE) == 1;
+        int rawModifierValue = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_VALUE);
+        if (rawModifierId == 2) {
+            initialAmount += rawModifierNegative ? -rawModifierValue : rawModifierValue;
         }
         this.initialAmount = initialAmount;
+
+        this.modifierType = resolveModifierType(rawModifierId);
+        this.modifierValue = modifierType != null ? rawModifierValue : null;
+        this.modifierNegative = modifierType != null ? rawModifierNegative : null;
 
         // Krystilia (wilderness) and Mortimer (Managing Miscellania hard diary reward) keep their
         // own separate "tasks completed" counters instead of feeding the regular one - ported
@@ -112,6 +128,24 @@ public class SlayerTaskState implements ConsumableState {
             this.masterName = null;
             this.taskName = null;
             this.taskLocation = null;
+        }
+    }
+
+    /** See {@link #modifierType}'s javadoc. */
+    private static String resolveModifierType(int modifierId) {
+        switch (modifierId) {
+            case 1:
+                return "points";
+            case 2:
+                return "quantity";
+            case 3:
+                return "clue_rate";
+            case 4:
+                return "superior_rate";
+            case 5:
+                return "xp";
+            default:
+                return null;
         }
     }
 
@@ -211,6 +245,18 @@ public class SlayerTaskState implements ConsumableState {
         return points;
     }
 
+    String modifierType() {
+        return modifierType;
+    }
+
+    Integer modifierValue() {
+        return modifierValue;
+    }
+
+    Boolean modifierNegative() {
+        return modifierNegative;
+    }
+
     @Override
     public Object get() {
         Map<String, Object> out = new HashMap<>();
@@ -226,6 +272,11 @@ public class SlayerTaskState implements ConsumableState {
             out.put("taskLocation", taskLocation);
             out.put("amountRemaining", amountRemaining);
             out.put("initialAmount", initialAmount);
+            if (modifierType != null) {
+                out.put("modifierType", modifierType);
+                out.put("modifierValue", modifierValue);
+                out.put("modifierNegative", modifierNegative);
+            }
         }
 
         return out;
@@ -249,6 +300,9 @@ public class SlayerTaskState implements ConsumableState {
                 && streak == other.streak
                 && Objects.equals(masterName, other.masterName)
                 && Objects.equals(taskName, other.taskName)
-                && Objects.equals(taskLocation, other.taskLocation);
+                && Objects.equals(taskLocation, other.taskLocation)
+                && Objects.equals(modifierType, other.modifierType)
+                && Objects.equals(modifierValue, other.modifierValue)
+                && Objects.equals(modifierNegative, other.modifierNegative);
     }
 }
